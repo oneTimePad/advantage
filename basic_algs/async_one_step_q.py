@@ -6,7 +6,7 @@ import numpy as np
 import random
 import math
 
-""" Asynchronous One-Step Q-Learning """
+""" Asynchronous One-Step Q-Learning for CartPole """
 
 tf.reset_default_graph()
 
@@ -27,11 +27,6 @@ with dqn_graph.as_default() as g:
     initializer = tf.contrib.layers.variance_scaling_initializer()
     with tf.variable_scope(one_step_dqn_scope):
         hidden = tf.layers.dense(state_action, 4, activation=tf.nn.relu6, kernel_initializer=initializer)
-        #hidden = tf.layers.dense(hidden, 256, activation=tf.nn.relu6, kernel_initializer=initializer)
-        #hidden = tf.layers.dense(hidden, 128, activation=tf.nn.relu6, kernel_initializer=initializer)
-        #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.relu6, kernel_initializer=initializer)
-        #hidden = tf.layers.dense(hidden, 32, activation=tf.nn.relu6, kernel_initializer=initializer)
-        #hidden = tf.layers.dense(hidden, 16, activation=tf.nn.relu6, kernel_initializer=initializer)
         q = tf.layers.dense(hidden, 1, activation=None, kernel_initializer=initializer)
 
         target = tf.placeholder(shape=(None, 1), dtype=tf.float32, name="target")
@@ -50,11 +45,6 @@ with dqn_graph.as_default() as g:
 
     with tf.variable_scope(one_step_dqn_neg_scope):
         hidden = tf.layers.dense(state_action, 4, activation=tf.nn.relu6, kernel_initializer=initializer)
-        #hidden = tf.layers.dense(hidden, 256, activation=tf.nn.relu6, kernel_initializer=initializer)
-        #hidden = tf.layers.dense(hidden, 128, activation=tf.nn.relu6, kernel_initializer=initializer)
-        #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.relu6, kernel_initializer=initializer)
-        #hidden = tf.layers.dense(hidden, 32, activation=tf.nn.relu6, kernel_initializer=initializer)
-        #hidden = tf.layers.dense(hidden, 16, activation=tf.nn.relu6, kernel_initializer=initializer)
         q_neg = tf.layers.dense(hidden, 1, activation=None, kernel_initializer=initializer)
 
         dqn_neg_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=one_step_dqn_neg_scope)
@@ -118,13 +108,13 @@ def act(session, q, state, actions, eps):
     for a in actions:
         q_s_a = sess.run(q, feed_dict={"state:0": [state], "action:0": [[a]]})
         q_values.append(q_s_a[0])
-    #print(q_values)
+
     return actions[np.argmax(q_values)] if np.random.uniform(0, 1) > eps else actions[random.sample(range(len(actions)), 1)[0]]
 
 GAMMA = 0.95
 ASYNC_UPDATE = 50
 GLOBAL_UPDATE = 50
-LEARNING_DECAY = 1#0.1
+LEARNING_DECAY = 1
 EPS_DECAY = .9
 EPS_DECAY_TIME = 50
 T = 0
@@ -142,32 +132,27 @@ def run(tid, lock, session, eps, accum_gradients, g_rms_prop, num_episodes, acti
     steps_since_async_update = 0
     for episode in range(1, num_episodes):
         done = False
-        G, reward = 0, 0
         s = env.reset()
         session.graph.finalize()
-        #a = act(session, q, s, actions, eps)
         steps = 0
-        #steps_since_async_update = 0
-        #t = 0
         while done != True:
             prev_s = s
             session.graph.finalize()
             a = act(session, q, s, actions, eps)
             s, reward, done, info = env.step(a)
-            #prev_a = a
+
             session.graph.finalize()
-            #session.graph.finalize()
             y = compute_target(session, q_neg, s, ACTIONS, reward, GAMMA, end=done)
 
             for grad in accum_gradients.keys():
                 session.graph.finalize()
                 accum_gradients[grad] += session.run(dqn_gradients[grad], feed_dict={target: y, state: [prev_s], action: [[a]]})
-            #t += 1
+
             steps += 1
             with lock:
                 T += 1
                 if T % GLOBAL_UPDATE == 0:
-                    #print("GLOBAL_UPDATE")
+
                     session.graph.finalize()
                     session.run(dqn_param_copy)
                     learning_rate = LEARNING_DECAY * learning_rate
@@ -179,26 +164,15 @@ def run(tid, lock, session, eps, accum_gradients, g_rms_prop, num_episodes, acti
                     session.graph.finalize()
                     apply_gradients(session, accum_gradients, g_rms_prop, steps_since_async_update)
                     steps_since_async_update = 0
-                    #print(accum_gradients)
                     accum_gradients = {v.name: 0.0 for v in dqn_params}
 
-                    #g_rms_prop =  {v.name: 0.0 for v in dqn_params}
-                    #print(accum_gradients)
-                    #print(session.run(dqn_params[1]))
-                    #print("ASYNC_UPDATE")
-
-                    #print(session.run(dqn_neg_params))
         if episode % EPS_DECAY_TIME == 0:
             eps = EPS_DECAY * eps
-        #print(t, T)
         print("TID %d STEP %d EPISODE %d EPS %f" %(tid, steps, episode, eps))
 
-    #apply_gradients(session, accum_gradients, g_rms_prop, steps_since_async_update)
-
 lock = threading.Lock()
-#EPSILONS =[0.05, 0.1, 0.15, 0.2]
-EPSILONS = [.1, .1, .1, .1]#[0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.1, 0.2, 0.5, 0.9]#[0.05, 0.1, 0.15, 0.2, 0.25]#, 0.3, 0.35, 0.4]
-#EPSILONS = [0.05, 0.1, 0.15, 0.2, 0.25, 0.15, 0.1]
+
+EPSILONS = [.1, .1, .1, .1]
 ACCUM_GRADIENTS = [{v.name: 0.0 for v in dqn_params} for _ in range(len(EPSILONS))]
 G_RMS_PROP = [ {v.name: 0.0 for v in dqn_params} for _ in range(len(EPSILONS))]
 NUM_EPISODES = 500
@@ -214,6 +188,7 @@ with dqn_graph.as_default():
             t.start()
         for t in threads:
             t.join()
+
         sess.run(dqn_param_copy)
 
         env = gym.make('CartPole-v0')
@@ -223,7 +198,6 @@ with dqn_graph.as_default():
             steps = 0
             while done != True:
                 a = act(sess, q, s, ACTIONS, eps=0)
-                #print(a)
                 env.render()
                 s, reward, done, info = env.step(a)
                 steps += 1
