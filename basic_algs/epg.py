@@ -5,7 +5,9 @@ import numpy as np
 #import multiprocessing
 import threading
 import random
-
+i#mport operator
+#from functools import reduce
+import math
 
 """ Evolved Policy Gradients for CartPole"""
 
@@ -200,15 +202,12 @@ NUM_STEPS = 20 # U
 NUM_WORKERS = 2
 TRAJ_SAMPLES = 10
 GAMMA = 0.95
+V = 10
+SIGMA = 0.1
+NUM_EPOCHS = 10
 
 lock = threading.Lock()
 barrier = threading.Barrier(NUM_WORKERS)
-epg_graph, _, loss_es_params_dict, _, _, _, _ = build_graph()
-with epg_graph.as_default():
-    # initialize phi (the loss ES params)
-    with tf.Session() as sess:
-        sess.run(tf.initialize_variables(loss_es_params_dict.values()))
-        loss_es_params_values = sess.run(loss_es_params_dict)
 
 def run_inner_loop(tid,  lock, barrier, loss_params, average_returns):
     """ Inner Loop run for each worker
@@ -219,6 +218,7 @@ def run_inner_loop(tid,  lock, barrier, loss_params, average_returns):
             lock: thread lock
             barrier: thread barrier
             loss_params: the loss params for this worker
+            average_returns: average returns list
     """
 
     # buffers for state, term_signal, reward
@@ -276,8 +276,6 @@ def run_inner_loop(tid,  lock, barrier, loss_params, average_returns):
                                 "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "learning_rate_memory_plh:0": [0.1]})
 
 
-                    print(tid, t)
-
                 """ Now we use learned policy to sample some trajectories,
                 and compute the average return from all trajectories
                 """
@@ -293,16 +291,50 @@ def run_inner_loop(tid,  lock, barrier, loss_params, average_returns):
                     returns.append(R)
                 average_returns[tid] = sum(returns) / TRAJ_SAMPLES
 
-            print("DONE")
-average_returns = [None] * NUM_WORKERS
-processes = [threading.Thread(target=run_inner_loop, args=(tid, lock, barrier, loss_es_params_values, average_returns)) for tid in range(NUM_WORKERS)]
-for process in processes:
-    process.start()
-for process in processes:
-    process.join()
-print(average_returns)
-"""
-def run_outer_loop():
 
-    for epochs
-"""
+def run_outer_loop():
+    """ Runs the outer loop of the algorithm
+    Spawns the workers and performs updates to phi (the ES loss params)
+    """
+    epg_graph, _, loss_es_params_dict, _, _, _, _ = build_graph()
+    with epg_graph.as_default():
+        # initialize phi (the loss ES params)
+        with tf.Session() as sess:
+            sess.run(tf.initialize_variables(loss_es_params_dict.values()))
+            loss_es_params_values = sess.run(loss_es_params_dict)
+
+            for _ in range(NUM_EPOCHS):
+                # construct perturbed phi (loss) params
+                epsilon_vectors = []
+                normal_vectors = []
+                for i in range(V):
+                    param_pertubed = {}
+                    normal_vectors_dict = {}
+                    for param in loss_es_params_values.keys():
+                        param_shape = loss_es_params_values[param].shape#map(lambda x: int(x), loss_es_params_dict[param].get_shape())
+                        #num_params = reduce(operator.mul, param_shape)
+
+                        normal = tf.random_normal(shape=param_shape)
+                        normal_vectors_dict[param] = sess.run(normal)
+                        param_pertubed[param] = loss_es_params_values[param] + normal_vectors_dict[param]#np.reshape(np.random.multivariate_normal([0] * num_params, np.eye(num_params, num_params)), param_shape)
+                    epsilon_vectors.append(param_pertubed)
+
+                threads = []
+                average_returns = [None] * NUM_WORKERS
+                for t in range(NUM_WORKERS):
+                    threads.append(threading.Thread(target=run_inner_loop, args=(tid, lock, barrier, epsilon_vectors[math.ceil(t * V/W)], average_returns)))
+
+                for thread in threadss:
+                    thread.start()
+                for thread in threads:
+                    thread.join()
+
+                # compute ES gradients and update
+                for param in loss_es_params_values.keys():
+                    F = []
+                    for i in range(NUM_WORKERS / V):
+                        F.append(sum(average_returns[W/V *i: W/V*(i+1)])/(W/V) * normal_vectors[i][param])
+                    grad = sum(F)/(SIGMA * V)
+                    loss_es_params_values[param] += grad
+
+run_outer_loop()
