@@ -2,20 +2,22 @@ import tensorflow as tf
 import gym
 import collections
 import numpy as np
+import os
 #import multiprocessing
 import threading
 import random
-i#mport operator
+#import operator
 #from functools import reduce
 import math
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 
 """ Evolved Policy Gradients for CartPole"""
 
-BUFFER_SIZE = 10 # N
+BUFFER_SIZE = 512 # N
 MEMORY_SIZE = 32
-SAMPLE_SIZE = 5 # M
+SAMPLE_SIZE = 64 # M
 NUM_ACTIONS = 2
-BATCH_SIZE = 2
+BATCH_SIZE = 32
 tf.reset_default_graph()
 
 def build_graph():
@@ -171,7 +173,6 @@ def build_graph():
         for param in loss_es_params:
             loss_es_params_dict[param.name] = param
 
-        print(loss.get_shape())
         # policy gradient update given M (SAMPLE_SIZE) loss samples
         policy_gradients = {}
         learning_rate_policy_plh = tf.placeholder(shape=[1], dtype=tf.float32, name="learning_rate_policy_plh")
@@ -197,14 +198,13 @@ def build_graph():
 
 
 # Hyperparameters
-NUM_EPOCHS = 1000
-NUM_STEPS = 20 # U
-NUM_WORKERS = 2
-TRAJ_SAMPLES = 10
-GAMMA = 0.95
-V = 10
-SIGMA = 0.1
-NUM_EPOCHS = 10
+NUM_STEPS = 64 * SAMPLE_SIZE # U
+NUM_WORKERS = 20
+TRAJ_SAMPLES = 64
+GAMMA = 0.75
+V = 5
+SIGMA = 0.01
+NUM_EPOCHS = 50
 
 lock = threading.Lock()
 barrier = threading.Barrier(NUM_WORKERS)
@@ -225,6 +225,10 @@ def run_inner_loop(tid,  lock, barrier, loss_params, average_returns):
     state_buffer = collections.deque([], maxlen=BUFFER_SIZE)
     term_buffer = collections.deque([], maxlen=BUFFER_SIZE)
     reward_buffer = collections.deque([], maxlen=BUFFER_SIZE)
+
+    learning_rate_policy = 7e-5
+    learning_rate_memory = 7e-5
+    LEARNING_DECAY = .99
 
     env = gym.make('CartPole-v0')
     epg_graph,  loss_es_assign_plhs, loss_es_params_dict, policy_gradients, memory_gradients, loss, context = build_graph()
@@ -271,9 +275,12 @@ def run_inner_loop(tid,  lock, barrier, loss_params, average_returns):
 
                             # policy and mem gradient update
                             sess.run(policy_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": state_mb,
-                                "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "learning_rate_policy_plh:0": [0.1]})
+                                "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "learning_rate_policy_plh:0": [learning_rate_policy]})
                             sess.run(memory_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": state_mb,
-                                "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "learning_rate_memory_plh:0": [0.1]})
+                                "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "learning_rate_memory_plh:0": [learning_rate_memory]})
+
+                            learning_rate_policy *= LEARNING_DECAY
+                            learning_rate_memory *= LEARNING_DECAY
 
 
                 """ Now we use learned policy to sample some trajectories,
@@ -318,13 +325,14 @@ def run_outer_loop():
                         normal_vectors_dict[param] = sess.run(normal)
                         param_pertubed[param] = loss_es_params_values[param] + normal_vectors_dict[param]#np.reshape(np.random.multivariate_normal([0] * num_params, np.eye(num_params, num_params)), param_shape)
                     epsilon_vectors.append(param_pertubed)
+                    normal_vectors.append(normal_vectors_dict)
 
                 threads = []
                 average_returns = [None] * NUM_WORKERS
-                for t in range(NUM_WORKERS):
-                    threads.append(threading.Thread(target=run_inner_loop, args=(tid, lock, barrier, epsilon_vectors[math.ceil(t * V/W)], average_returns)))
+                for tid in range(NUM_WORKERS):
+                    threads.append(threading.Thread(target=run_inner_loop, args=(tid, lock, barrier, epsilon_vectors[math.floor(tid * V/NUM_WORKERS)], average_returns)))
 
-                for thread in threadss:
+                for thread in threads:
                     thread.start()
                 for thread in threads:
                     thread.join()
@@ -332,9 +340,12 @@ def run_outer_loop():
                 # compute ES gradients and update
                 for param in loss_es_params_values.keys():
                     F = []
-                    for i in range(NUM_WORKERS / V):
-                        F.append(sum(average_returns[W/V *i: W/V*(i+1)])/(W/V) * normal_vectors[i][param])
+                    num_workers_per_set = int(NUM_WORKERS / V) # guarantee divis
+                    for i in range(num_workers_per_set):
+                        F.append(sum(average_returns[num_workers_per_set *i: num_workers_per_set*(i+1)])/(num_workers_per_set) * normal_vectors[i][param])
                     grad = sum(F)/(SIGMA * V)
                     loss_es_params_values[param] += grad
+
+                print("EPOCH %d ", average_returns)
 
 run_outer_loop()
