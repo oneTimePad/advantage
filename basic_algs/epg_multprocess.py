@@ -1,8 +1,8 @@
-import tensorflow as tf
-import gym
+
 import collections
 import numpy as np
 import os
+import multiprocessing
 #import multiprocessing
 import threading
 import random
@@ -19,9 +19,9 @@ SAMPLE_SIZE = 128 # M
 NUM_ACTIONS = 4
 STATE_SPACE = 24
 BATCH_SIZE = 32
-tf.reset_default_graph()
 
-def build_graph():
+
+def build_graph(tf):
     epg_graph = tf.Graph()
 
     with epg_graph.as_default() as g:
@@ -212,7 +212,7 @@ def build_graph():
 # Hyperparameters
 NUM_STEPS = 128 * SAMPLE_SIZE # U
 NUM_WORKERS = 256
-TRAJ_SAMPLES = 256
+TRAJ_SAMPLES = 64#256
 GAMMA = 0.95
 V = 64
 SIGMA = 2.0
@@ -220,9 +220,10 @@ NUM_EPOCHS = 5#50
 LEARNING_RATE_LOSS_ES = 0.002#7e-4
 LEARNING_DECAY = 0.99
 SIGMA_DECAY = 0.85
-barrier = threading.Barrier(NUM_WORKERS)
+NUM_PROCS = 1
 
-def run_inner_loop(tid, barrier, loss_params, average_returns, run_sim=False):
+
+def run_inner_loop(gym, tf, tid, barrier, loss_params, average_returns, run_sim=False):
     """ Inner Loop run for each worker
         Samples from MDP and follows a randomly initialized policy
         updates both memory and policy every M steps
@@ -247,28 +248,31 @@ def run_inner_loop(tid, barrier, loss_params, average_returns, run_sim=False):
 
     #tf.reset_default_graph()
     env = gym.make('BipedalWalker-v2')
-    epg_graph,  loss_es_assign_plhs, loss_es_params_dict, policy_gradients, memory_gradients, loss, context = build_graph()
+    epg_graph,  loss_es_assign_plhs, loss_es_params_dict, policy_gradients, memory_gradients, loss, context = build_graph(tf)
     with epg_graph.as_default() as g:
         policy_sample = g.get_tensor_by_name("policy_sample:0")
         sigma_sample = g.get_tensor_by_name("sigma_sample:0")
 
         with tf.Session(graph=g) as sess:
             sess.run(tf.global_variables_initializer())
+
             # assign perturb phi (loss params)
             for param in loss_params.keys():
                 sess.run(loss_es_assign_plhs[param][1], feed_dict={loss_es_assign_plhs[param][0]: loss_params[param]})
+
             if barrier is not None:
                 barrier.wait()
             t = 0
             while t < NUM_STEPS:
                 s = env.reset()
                 done = False
-                steps = 0
+                rewards = 0
                 while done != True:
-                    steps += 1
+                    #steps += 1
                     mean, sigma = sess.run((policy_sample, sigma_sample), feed_dict={"state_sample_plh:0": np.array([s])})
                     a = np.random.multivariate_normal(mean=mean[0], cov=np.diag(sigma[0]))
                     next_step, reward, done, info = env.step(a)
+                    rewards += reward
                     state_buffer.append(s)
                     term_buffer.append([done])
                     reward_buffer.append([reward])
@@ -278,7 +282,7 @@ def run_inner_loop(tid, barrier, loss_params, average_returns, run_sim=False):
                     if t >= NUM_STEPS:
                         break
                     if done:
-                        print("TID %d STEPS %d" %(tid, steps))
+                        print("TID %d STEPS %d" %(tid, rewards))
 
                     # once we have enoguh samples perform policy and mem param update
                     if  t == BUFFER_SIZE or (t >= BUFFER_SIZE and t % SAMPLE_SIZE == 0):
@@ -334,8 +338,9 @@ def run_inner_loop(tid, barrier, loss_params, average_returns, run_sim=False):
                 for i in reversed(range(len(rewards))):
                     R = rewards[i] + GAMMA * R
                 returns.append(R)
+
             if average_returns is not None:
-                average_returns[tid] = sum(returns) / TRAJ_SAMPLES
+                average_returns[tid % NUM_WORKERS/NUM_PROCS] = (tid, sum(returns) / TRAJ_SAMPLES)
 
 
 def run_outer_loop():
@@ -343,8 +348,30 @@ def run_outer_loop():
     Spawns the workers and performs updates to phi (the ES loss params)
     """
     global LEARNING_RATE_LOSS_ES, LEARNING_DECAY, SIGMA
+    queue = multiprocessing.Queue()
+    def spawn_threads(vectors_queue, rewards_queue, tid_start):
+        import gym
+        import tensorflow as tf
+        while True:
+            vectors = vectors_queue.get()
+            threads = []
+            barrier = threading.Barrier(int(NUM_WORKERS/NUM_PROCS))
+            returns = [None] * int(NUM_WORKERS/NUM_PROCS)
+            for tid in range(tid_start, tid_start + int(NUM_WORKERS/NUM_PROCS)):
+                threads.append(threading.Thread(target=run_inner_loop, args=(gym, tf, tid, barrier, vectors[math.floor((tid * V/NUM_WORKERS))], returns)))
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+            queue.put(returns)
+    vector_queues = [multiprocessing.Queue()] * NUM_WORKERS
+    processes = [ multiprocessing.Process(target=spawn_threads, args=(vector_queues[i], queue, i * int(NUM_WORKERS/NUM_PROCS))) for i in range(NUM_PROCS)]
 
-    epg_graph, _, loss_es_params_dict, _, _, _, _ = build_graph()
+    for process in processes:
+        process.start()
+
+    import tensorflow as tf
+    epg_graph, _, loss_es_params_dict, _, _, _, _ = build_graph(tf)
     with epg_graph.as_default():
         # initialize phi (the loss ES params)
         with tf.Session() as sess:
@@ -368,15 +395,20 @@ def run_outer_loop():
                     epsilon_vectors.append(param_pertubed)
                     normal_vectors.append(normal_vectors_dict)
 
-                threads = []
-                average_returns = [None] * NUM_WORKERS
-                for tid in range(NUM_WORKERS):
-                    threads.append(threading.Thread(target=run_inner_loop, args=(tid, barrier, epsilon_vectors[math.floor(tid * V/NUM_WORKERS)], average_returns)))
+                for i, vector_queue in enumerate(vector_queues):
+                    vector_queue.put(epsilon_vectors)#[i * int(NUM_WORKERS/NUM_PROCS): (i+1) * int(NUM_WORKERS/NUM_PROCS)])
 
-                for thread in threads:
-                    thread.start()
-                for thread in threads:
-                    thread.join()
+
+                average_returns = [None] * NUM_WORKERS
+                workers = 0
+                while workers != NUM_WORKERS:
+                    tid, returns = queue.get()
+                    for r in returns:
+                        average_returns[r[0]] = r[1]
+                    workers += int(NUM_WORKERS/NUM_PROCS)
+
+                for process in processes:
+                    process.wait()
 
                 # compute ES gradients and update
                 for param in loss_es_params_values.keys():
@@ -399,4 +431,4 @@ def run_outer_loop():
 
 loss_params = run_outer_loop()
 print("DONE")
-run_inner_loop(0,  None, loss_params, None, run_sim=True)
+run_inner_loop(gym, tf, 0,  None, loss_params, None, run_sim=True)
