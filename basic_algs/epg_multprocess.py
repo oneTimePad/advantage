@@ -10,6 +10,7 @@ import pickle
 #import operator
 #from functools import reduce
 import math
+import gym
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 
 """ Evolved Policy Gradients for CartPole"""
@@ -70,8 +71,8 @@ def build_graph(tf):
         with tf.variable_scope(policy_scope) as scope:
             hidden = tf.layers.dense(state_plh, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
+            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
+            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             policy = tf.layers.dense(hidden, NUM_ACTIONS, activation=None, kernel_initializer=initializer)
             #policy = tf.nn.softmax(policy, axis=1)
 
@@ -86,8 +87,8 @@ def build_graph(tf):
         with tf.variable_scope(scope, reuse=True):
             hidden = tf.layers.dense(state_sample_plh, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
+            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
+            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             policy_sample = tf.layers.dense(hidden, NUM_ACTIONS, activation=None, kernel_initializer=initializer)
             sigma_sample = tf.layers.dense(tf.ones([1, NUM_ACTIONS]), NUM_ACTIONS, activation=tf.nn.tanh)
             sigma_sample = tf.nn.relu(sigma_sample)
@@ -106,8 +107,8 @@ def build_graph(tf):
         with tf.variable_scope(scope, reuse=True):
             hidden = tf.layers.dense(state_batch_plh, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
+            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
+            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             policy_batch = tf.layers.dense(hidden, NUM_ACTIONS, activation=None, kernel_initializer=initializer)
             sigma_batch = tf.layers.dense(tf.ones([1, NUM_ACTIONS]), NUM_ACTIONS, activation=tf.nn.tanh)
             sigma_batch = tf.nn.relu(sigma_batch)
@@ -232,12 +233,12 @@ def build_graph(tf):
 # Hyperparameters
 NUM_STEPS = 128 * SAMPLE_SIZE # U
 NUM_WORKERS = 256
-TRAJ_SAMPLES = 32#256
+TRAJ_SAMPLES = 32
 GAMMA = 0.95
 V = 64
-SIGMA = 0.2
-NUM_EPOCHS = 5#50
-LEARNING_RATE_LOSS_ES = 1e-2#7e-4
+SIGMA = 0.4
+NUM_EPOCHS = 1000000
+LEARNING_RATE_LOSS_ES = 1e-2
 LEARNING_DECAY = 0.99
 SIGMA_DECAY = 1.0
 NUM_PROCS = 8
@@ -290,10 +291,14 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
         with tf.Session(graph=g, config=config) as sess:
             sess.run(tf.global_variables_initializer())
             # assign perturb phi (loss params)
-            with thread_lock:
-                with gpu_lock:
-                    for param in loss_params.keys():
-                        sess.run(loss_es_assign_plhs[param][1], feed_dict={loss_es_assign_plhs[param][0]: loss_params[param]})
+            if thread_lock and gpu_lock:
+                with thread_lock:
+                    with gpu_lock:
+                        for param in loss_params.keys():
+                            sess.run(loss_es_assign_plhs[param][1], feed_dict={loss_es_assign_plhs[param][0]: loss_params[param]})
+            else:
+                for param in loss_params.keys():
+                    sess.run(loss_es_assign_plhs[param][1], feed_dict={loss_es_assign_plhs[param][0]: loss_params[param]})
             if barrier is not None:
                 barrier.wait()
             t = 0
@@ -315,10 +320,12 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                     if sum(state_running_stddev > 0) != 0:
                         s = s#(s - state_running_average) / np.sqrt(state_running_stddev)
                     s[np.isnan(s)] = 1.0
-
-                    with thread_lock:
-                        with gpu_lock:
-                            mean, sigma = sess.run((policy_sample, sigma_sample), feed_dict={"state_sample_plh:0": np.array([s])})
+                    if thread_lock and gpu_lock:
+                        with thread_lock:
+                            with gpu_lock:
+                                mean, sigma = sess.run((policy_sample, sigma_sample), feed_dict={"state_sample_plh:0": np.array([s])})
+                    else:
+                        mean, sigma = sess.run((policy_sample, sigma_sample), feed_dict={"state_sample_plh:0": np.array([s])})
                     a = np.random.multivariate_normal(mean=mean[0], cov=np.diag(sigma[0]))
 
                     #print(a)
@@ -387,12 +394,18 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
 
                             # policy and mem gradient update
                             #if run_sim:
-                            with thread_lock:
-                                with gpu_lock:
-                                    sess.run(policy_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": state_mb,
-                                        "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "action_batch_plh:0": action_mb, "learning_rate_policy_plh:0": [learning_rate_policy]})
-                                    sess.run(memory_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": state_mb,
-                                        "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "action_batch_plh:0": action_mb, "learning_rate_memory_plh:0": [learning_rate_memory]})
+                            if thread_lock and gpu_lock:
+                                with thread_lock:
+                                    with gpu_lock:
+                                        sess.run(policy_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": state_mb,
+                                            "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "action_batch_plh:0": action_mb, "learning_rate_policy_plh:0": [learning_rate_policy]})
+                                        sess.run(memory_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": state_mb,
+                                            "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "action_batch_plh:0": action_mb, "learning_rate_memory_plh:0": [learning_rate_memory]})
+                            else:
+                                        sess.run(policy_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": state_mb,
+                                            "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "action_batch_plh:0": action_mb, "learning_rate_policy_plh:0": [learning_rate_policy]})
+                                        sess.run(memory_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": state_mb,
+                                            "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "action_batch_plh:0": action_mb, "learning_rate_memory_plh:0": [learning_rate_memory]})
 
                             learning_rate_policy *= LEARNING_DECAY
                             learning_rate_memory *= LEARNING_DECAY
@@ -413,9 +426,12 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                 reward_running_stddev = 0
                 reward_running_average = None
                 while done != True:
-                    with thread_lock:
-                        with gpu_lock:
-                            mean, sigma = sess.run((policy_sample, sigma_sample), feed_dict={"state_sample_plh:0": np.array([s])})
+                    if thread_lock and gpu_lock:
+                        with thread_lock:
+                            with gpu_lock:
+                                mean, sigma = sess.run((policy_sample, sigma_sample), feed_dict={"state_sample_plh:0": np.array([s])})
+                    else:
+                        mean, sigma = sess.run((policy_sample, sigma_sample), feed_dict={"state_sample_plh:0": np.array([s])})
                     #a = mean[0]
                     a = np.random.multivariate_normal(mean=mean[0], cov=np.diag(sigma[0]))
                     a[a > 1.0] = 1.0
@@ -447,7 +463,7 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                     R = rewards[i] + GAMMA * R
                 returns.append(R)
                 if average_returns is not None:
-                    average_returns[tid % NUM_WORKERS/NUM_PROCS] = (tid, sum(returns) / TRAJ_SAMPLES)
+                    average_returns[tid % int(NUM_WORKERS/NUM_PROCS)] = (tid, sum(returns) / TRAJ_SAMPLES)
 
 
 def run_outer_loop():
@@ -456,26 +472,35 @@ def run_outer_loop():
     """
     global LEARNING_RATE_LOSS_ES, LEARNING_DECAY, SIGMA
     queue = multiprocessing.Queue()
-    def spawn_threads(gpu_lock, vectors_queue, rewards_queue, tid_start):
+    def spawn_threads(event, gpu_lock, vectors_queue, rewards_queue, tid_start):
         import gym
         import tensorflow as tf
         import threading
         thread_lock = threading.Lock()
-        while True:
-            vectors = vectors_queue.get()
+        while event.is_set():
+            vectors = vectors_queue.get(block=True, timeout=None)
+            if not event.is_set():
+                break
             threads = []
             barrier = threading.Barrier(int(NUM_WORKERS/NUM_PROCS))
             returns = [None] * int(NUM_WORKERS/NUM_PROCS)
-            for tid in range(tid_start, tid_start + int(NUM_WORKERS/NUM_PROCS)):
-                threads.append(threading.Thread(target=run_inner_loop, args=(gpu_lock, thread_lock,gym, tf, tid, barrier, vectors[math.floor((tid * V/NUM_WORKERS))], returns)))
+            num_vecs = len(vectors)
+            num_workers_per_proc = int(NUM_WORKERS/NUM_PROCS)
+            #print(tid_start, num_workers_per_proc, num_vecs)
+            for tid in range(tid_start, tid_start + num_workers_per_proc):
+                threads.append(threading.Thread(target=run_inner_loop, args=(gpu_lock, thread_lock,gym, tf, tid, barrier, vectors[math.floor(( (tid % num_workers_per_proc) * (num_vecs)/(num_workers_per_proc)))], returns)))
             for thread in threads:
                 thread.start()
             for thread in threads:
                 thread.join()
             queue.put(returns)
-    vector_queues = [multiprocessing.Queue()] * NUM_WORKERS
+        exit(0)
+    events = [multiprocessing.Event()] * NUM_PROCS
+    for event in events:
+        event.set()
+    vector_queues = [multiprocessing.Queue(maxsize=1)] * NUM_PROCS
     gpu_lock = multiprocessing.Lock()
-    processes = [ multiprocessing.Process(target=spawn_threads, args=(gpu_lock, vector_queues[i], queue, i * int(NUM_WORKERS/NUM_PROCS))) for i in range(NUM_PROCS)]
+    processes = [ multiprocessing.Process(target=spawn_threads, args=(events[i], gpu_lock, vector_queues[i], queue, i * int(NUM_WORKERS/NUM_PROCS))) for i in range(NUM_PROCS)]
 
     for process in processes:
         process.start()
@@ -496,6 +521,7 @@ def run_outer_loop():
                 # construct perturbed phi (loss) params
                 epsilon_vectors = []
                 normal_vectors = []
+
                 for i in range(V):
                     param_pertubed = {}
                     normal_vectors_dict = {}
@@ -510,19 +536,16 @@ def run_outer_loop():
                     normal_vectors.append(normal_vectors_dict)
 
                 for i, vector_queue in enumerate(vector_queues):
-                    vector_queue.put(epsilon_vectors)#[i * int(NUM_WORKERS/NUM_PROCS): (i+1) * int(NUM_WORKERS/NUM_PROCS)])
+                    vector_queue.put(epsilon_vectors[i * int(V/NUM_PROCS): (i+1) * int(V/NUM_PROCS)])
 
 
                 average_returns = [None] * NUM_WORKERS
                 workers = 0
                 while workers != NUM_WORKERS:
-                    tid, returns = queue.get()
+                    returns = queue.get()
                     for r in returns:
                         average_returns[r[0]] = r[1]
                     workers += int(NUM_WORKERS/NUM_PROCS)
-
-                for process in processes:
-                    process.wait()
 
                 # compute ES gradients and update
                 for param in loss_es_params_values.keys():
@@ -537,9 +560,15 @@ def run_outer_loop():
 
                 print("EPOCH %d " % e, average_returns)
                 print("AVERAGE %f" % (sum(average_returns)/ NUM_WORKERS))
-                run_inner_loop(0,  None, loss_es_params_values, None, run_sim=True)
+                run_inner_loop(None, None, gym, tf, 0,  None, loss_es_params_values, None, run_sim=True)
                 with open(ENV + "-epg_loss_params.pkl", "wb") as f:
                     pickle.dump(loss_es_params_values, f, pickle.HIGHEST_PROTOCOL)
+            for event in events:
+                event.clear()
+            for vector_queue in vector_queues:
+                vector_queue.put([])
+            for process in processes:
+                process.join()
         return loss_es_params_values
 
 
@@ -547,4 +576,5 @@ def run_outer_loop():
 
 loss_params = run_outer_loop()
 print("DONE")
-run_inner_loop(gym, tf, 0,  None, loss_params, None, run_sim=True)
+import tensorflow as tf
+run_inner_loop(None, None, gym, tf, 0,  None, loss_params, None, run_sim=True)
