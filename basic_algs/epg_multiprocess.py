@@ -94,7 +94,7 @@ def build_graph(tf):
             policy_sample = tf.layers.dense(hidden, NUM_ACTIONS, activation=None, kernel_initializer=initializer)
             sigma_sample = tf.layers.dense(tf.ones([1, NUM_ACTIONS]), NUM_ACTIONS, activation=None, use_bias=False, kernel_initializer=initializer)
             #policy_sample = tf.nn.softmax(policy_sample, axis=1)
-            policy_sample = tf.nn.tanh(policy_sample)
+            #policy_sample = tf.nn.tanh(policy_sample)
             # sample action
         policy_sample = tf.identity(policy_sample, name="policy_sample")#tf.argmax(policy_sample, axis=1, name="policy_sample")
         sigma_sample = tf.identity(sigma_sample, name="sigma_sample")
@@ -143,7 +143,7 @@ def build_graph(tf):
         context_scope = "context"
         with tf.variable_scope(context_scope):
             # tf.cast(tf.expand_dims(tf.argmax(policy, axis=1), axis=1), tf.float32)
-            context_input = tf.concat([state_plh, terminate_plh, reward_plh,  action_plh, memory_tile, tf.square(action_plh - policy) / (2 * tf.square(sigma_tile))], axis=1)
+            context_input = tf.concat([state_plh, terminate_plh, reward_plh,  action_plh, memory_tile, tf.square(action_plh - policy) / (2 * tf.square(tf.exp(sigma_tile)))], axis=1)
             context_input = tf.expand_dims(context_input, axis=0)
             hidden = tf.layers.conv1d(context_input, 10, 8, strides=7, activation=tf.nn.leaky_relu, padding="same")
             hidden = tf.layers.conv1d(hidden, 10, 4, strides=2, activation=tf.nn.leaky_relu, padding="same")
@@ -165,7 +165,7 @@ def build_graph(tf):
         #samples_plh = tf.placeholder(shape=[BATCH_SIZE, bar.get_shape()[1]], dtype=tf.float32, name="samples_plh")
         context_plh = tf.placeholder(shape=context.get_shape(), dtype=tf.float32, name="context_plh")
         # tf.cast(tf.expand_dims(tf.argmax(policy_batch, axis=1), axis=1), tf.float32)
-        loss_input = tf.concat([state_batch_plh, terminate_batch_plh, reward_batch_plh, action_batch_plh,  memory_tile_batch, tf.square(action_batch_plh - policy_batch) / (2 * tf.square(sigma_tile_batch))], axis=1)
+        loss_input = tf.concat([state_batch_plh, terminate_batch_plh, reward_batch_plh, action_batch_plh,  memory_tile_batch, tf.square(action_batch_plh - policy_batch) / (2 * tf.square(tf.exp(sigma_tile_batch)))], axis=1)
 
         """ loss network operates on BATCH_SIZE buffer samples
         these samples include M {state, termination_signal pairs}
