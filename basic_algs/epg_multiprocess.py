@@ -321,6 +321,18 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                     done = False
                     rewards = 0
                     steps = 0
+
+                    state_running_average  = np.array([])
+                    reward_running_average = None
+
+
+                    state_running_stddev = np.array([])
+                    reward_running_stddev = 0
+
+
+                    num_rewards = 0
+                    num_states = 0
+
                     while done != True:
                         steps += 1
 
@@ -391,8 +403,8 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                             joint = list(zip(list(state_buffer)[-SAMPLE_SIZE:], list(term_buffer)[-SAMPLE_SIZE:], list(reward_buffer)[-SAMPLE_SIZE:], list(action_buffer)[-SAMPLE_SIZE:]))
                             random.shuffle(joint)
                             random.shuffle(joint)
-                            #random.shuffle(joint)
-                            #random.shuffle(joint)
+                            random.shuffle(joint)
+                            random.shuffle(joint)
                             #random.shuffle(joint)
                             #random.shuffle(joint)
                             #random.shuffle(joint)
@@ -440,6 +452,17 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                     #num_rewards = 0
                     #reward_running_stddev = 0
                     #reward_running_average = None
+
+                    state_running_average  = np.array([])
+
+
+                    state_running_stddev = np.array([])
+
+
+                    num_states = 0
+
+
+
                     while done != True:
                         num_states += 1
                         old_mean_state = state_running_average
@@ -613,7 +636,7 @@ def run_outer_loop():
                     F = []
                     num_workers_per_set = int(NUM_WORKERS / V) # guarantee divis
                     for i in range(num_workers_per_set):
-                        F.append(sum(average_returns[num_workers_per_set *i: num_workers_per_set*(i+1)])/(num_workers_per_set) * normal_vectors[i][param])
+                        F.append((sum(average_returns[num_workers_per_set *i: num_workers_per_set*(i+1)])/(num_workers_per_set)) * normal_vectors[i][param])
                     grad = sum(F)/(SIGMA * V)
                     loss_es_params_values[param] += (LEARNING_RATE_LOSS_ES * grad)
                 LEARNING_RATE_LOSS_ES *= LEARNING_DECAY
