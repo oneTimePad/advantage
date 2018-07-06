@@ -187,6 +187,21 @@ def build_graph(tf):
             param_value_plh = tf.placeholder(shape=param.get_shape(), dtype=tf.float32)
             assign_op = tf.assign(param, param_value_plh)
             loss_es_assign_plhs[param.name] = (param_value_plh, assign_op)
+
+        loss_es_grad_plhs = {}
+        grads_and_vars
+        loss_es_optimizer = tf.train.AdamOptimizer(loss_es_lr_init)
+        l2_loss = tf.nn.l2_loss(loss_es_params)
+        l2_grads_and_vars = loss.loss_es_optimizer.compute_gradients(l2_loss, loss_es_params)
+        for l2_grad in l2_grads_and_vars:
+            l2_gradient,
+            param_grad_plh = tf.placeholder(shape=param.get_shape(), dtype=tf.float32)
+            loss_es_grad_plhs[param] = param_grad_plh
+
+
+
+
+
             #loss_es_assign_ops.append(assign_op)
 
         # require params be assigned before evaluating
@@ -234,7 +249,7 @@ def build_graph(tf):
 # Hyperparameters
 NUM_STEPS = 128 * SAMPLE_SIZE # U
 NUM_WORKERS = 256
-TRAJ_SAMPLES = 32
+TRAJ_SAMPLES = 3
 GAMMA = 0.95
 V = 64
 SIGMA = 0.01
@@ -322,16 +337,16 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                     rewards = 0
                     steps = 0
 
-                    state_running_average  = np.array([])
-                    reward_running_average = None
+                    #state_running_average  = np.array([])
+                    #reward_running_average = None
 
 
-                    state_running_stddev = np.array([])
-                    reward_running_stddev = 0
+                    #state_running_stddev = np.array([])
+                    #reward_running_stddev = 0
 
 
-                    num_rewards = 0
-                    num_states = 0
+                    #num_rewards = 0
+                    #num_states = 0
 
                     while done != True:
                         steps += 1
@@ -453,13 +468,13 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                     #reward_running_stddev = 0
                     #reward_running_average = None
 
-                    state_running_average  = np.array([])
+                    #state_running_average  = np.array([])
 
 
-                    state_running_stddev = np.array([])
+                    #state_running_stddev = np.array([])
 
 
-                    num_states = 0
+                    #num_states = 0
 
 
 
