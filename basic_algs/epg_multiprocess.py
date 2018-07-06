@@ -23,8 +23,10 @@ SAMPLE_SIZE = 64 # M
 NUM_ACTIONS = 17
 STATE_SPACE = 376
 BATCH_SIZE = 32
+L2_BETA = 1e-4
 policy_lr_init = 1e-3
 memory_lr_init = 1e-3
+loss_es_lr_init = 1e-2
 
 def build_graph(tf):
     epg_graph = tf.Graph()
@@ -189,14 +191,18 @@ def build_graph(tf):
             loss_es_assign_plhs[param.name] = (param_value_plh, assign_op)
 
         loss_es_grad_plhs = {}
-        grads_and_vars
-        loss_es_optimizer = tf.train.AdamOptimizer(loss_es_lr_init)
+        loss_es_optimizer = tf.train.AdamOptimizer(loss_es_lr_init, beta1=0.0)
         l2_loss = tf.nn.l2_loss(loss_es_params)
-        l2_grads_and_vars = loss.loss_es_optimizer.compute_gradients(l2_loss, loss_es_params)
-        for l2_grad in l2_grads_and_vars:
-            l2_gradient,
+        l2_grads_and_vars = loss_es_optimizer.compute_gradients(l2_loss, loss_es_params)
+        total_grads_and_vars = []
+        for l2_grad_and_var in l2_grads_and_vars:
+            l2_gradient, param = l2_grad_and_var
             param_grad_plh = tf.placeholder(shape=param.get_shape(), dtype=tf.float32)
-            loss_es_grad_plhs[param] = param_grad_plh
+            loss_es_grad_plhs[param.name] = param_grad_plh
+            total_grads_and_vars.append((param_grad_plh + L2_BETA * l2_gradient, param))
+        loss_es_gradients = loss_es_optimizer.apply_gradients(total_grads_and_vars)
+
+
 
 
 
@@ -243,7 +249,7 @@ def build_graph(tf):
         #memory_params_dict = {}
         #for param in memory_params:
         #    memory_params_dict[param.name] = param
-    return epg_graph,  loss_es_assign_plhs, loss_es_params_dict, policy_gradients, memory_gradients, loss, context
+    return epg_graph,  loss_es_assign_plhs, loss_es_params_dict, loss_es_grad_plhs, loss_es_gradients,  policy_gradients, memory_gradients, loss, context
 
 
 # Hyperparameters
@@ -279,7 +285,7 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
     global ENV
     env = gym.make(ENV)
     tf.reset_default_graph()
-    epg_graph,  loss_es_assign_plhs, loss_es_params_dict, policy_gradients, memory_gradients, loss, context = build_graph(tf)
+    epg_graph,  loss_es_assign_plhs, loss_es_params_dict, loss_es_grad_plhs, loss_es_gradients,  policy_gradients, memory_gradients, loss, context = build_graph(tf)
 
     with epg_graph.as_default() as g:
         policy_sample = g.get_tensor_by_name("policy_sample:0")
@@ -605,7 +611,7 @@ def run_outer_loop():
         process.start()
 
     import tensorflow as tf
-    epg_graph, _, loss_es_params_dict, _, _, _, _ = build_graph(tf)
+    epg_graph, _, loss_es_params_dict, loss_es_grad_plhs, loss_es_gradients, _, _, _, _ = build_graph(tf)
     with epg_graph.as_default():
         # initialize phi (the loss ES params)
         config = tf.ConfigProto()
@@ -646,6 +652,7 @@ def run_outer_loop():
                         average_returns[r[0]] = r[1]
                     workers += int(NUM_WORKERS/NUM_PROCS)
 
+                loss_es_grad_feed_dict = {}
                 # compute ES gradients and update
                 for param in loss_es_params_values.keys():
                     F = []
@@ -653,12 +660,18 @@ def run_outer_loop():
                     for i in range(num_workers_per_set):
                         F.append((sum(average_returns[num_workers_per_set *i: num_workers_per_set*(i+1)])/(num_workers_per_set)) * normal_vectors[i][param])
                     grad = sum(F)/(SIGMA * V)
-                    loss_es_params_values[param] += (LEARNING_RATE_LOSS_ES * grad)
-                LEARNING_RATE_LOSS_ES *= LEARNING_DECAY
-                SIGMA *= SIGMA_DECAY
+                    loss_es_grad_feed_dict[loss_es_grad_plhs[param]] = grad
+                sess.run(loss_es_gradients, feed_dict=loss_es_grad_feed_dict)
+                #LEARNING_RATE_LOSS_ES *= LEARNING_DECAY
+                #SIGMA *= SIGMA_DECAY
+
+                #for param in loss_es_params_values.keys():
+                #    sess.run(loss_es_assign_plhs[param][1], feed_dict={loss_es_assign_plhs[param][0]: loss_es_params_values[param]})
+
 
                 print("EPOCH %d " % e, average_returns)
                 print("AVERAGE %f" % (sum(average_returns)/ NUM_WORKERS))
+                loss_es_params_values = sess.run(loss_es_params_dict)
                 #run_inner_loop(None, None, gym, tf, 0,  None, loss_es_params_values, None, run_sim=True)
                 with open(ENV + "-epg_loss_params.pkl", "wb") as f:
                     pickle.dump(loss_es_params_values, f, pickle.HIGHEST_PROTOCOL)
