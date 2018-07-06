@@ -192,7 +192,8 @@ def build_graph(tf):
 
         loss_es_grad_plhs = {}
         loss_es_optimizer = tf.train.AdamOptimizer(loss_es_lr_init, beta1=0.0)
-        l2_loss = tf.nn.l2_loss(loss_es_params)
+        l2_loss = sum([ tf.reduce_mean(tf.nn.l2_loss(param)) for param in loss_es_params ])
+
         l2_grads_and_vars = loss_es_optimizer.compute_gradients(l2_loss, loss_es_params)
         total_grads_and_vars = []
         for l2_grad_and_var in l2_grads_and_vars:
@@ -617,7 +618,7 @@ def run_outer_loop():
         config = tf.ConfigProto()
         config.gpu_options.allow_growth=True
         with tf.Session(config=config) as sess:
-            sess.run(tf.variables_initializer(loss_es_params_dict.values()))
+            sess.run(tf.global_variables_initializer())#tf.variables_initializer(loss_es_params_dict.values()))
             loss_es_params_values = sess.run(loss_es_params_dict)
             with open(ENV + "-epg_loss_params.pkl", "wb") as f:
                 pickle.dump(loss_es_params_values, f, pickle.HIGHEST_PROTOCOL)
