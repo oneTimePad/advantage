@@ -39,7 +39,7 @@ def build_graph(tf):
         memory_scope = "memory"
         with tf.variable_scope(memory_scope):
             # memory units
-            memory = tf.layers.dense(tf.ones([1, MEMORY_SIZE]), MEMORY_SIZE, activation=tf.nn.tanh)
+            memory = tf.layers.dense(tf.ones([1, 2 * MEMORY_SIZE]), MEMORY_SIZE, activation=tf.nn.tanh)
 
         # replicate memory to concate with M (BUFFER_SIZE) samples
         memory_tile = tf.tile(memory, [BUFFER_SIZE, 1])
@@ -200,7 +200,7 @@ def build_graph(tf):
             l2_gradient, param = l2_grad_and_var
             param_grad_plh = tf.placeholder(shape=param.get_shape(), dtype=tf.float32)
             loss_es_grad_plhs[param.name] = param_grad_plh
-            total_grads_and_vars.append((param_grad_plh + L2_BETA * l2_gradient, param))
+            total_grads_and_vars.append((param_grad_plh - L2_BETA * l2_gradient, param))
         loss_es_gradients = loss_es_optimizer.apply_gradients(total_grads_and_vars)
 
 
