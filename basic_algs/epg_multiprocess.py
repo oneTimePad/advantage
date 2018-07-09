@@ -17,12 +17,12 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 
 """ Evolved Policy Gradients for CartPole"""
 
-BUFFER_SIZE = 512 # N
+BUFFER_SIZE = 1024 # N
 MEMORY_SIZE = 32
 SAMPLE_SIZE = 64 # M
 NUM_ACTIONS = 17
 STATE_SPACE = 376
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 L2_BETA = 1e-4
 policy_lr_init = 1e-3
 memory_lr_init = 1e-3
@@ -106,7 +106,7 @@ def build_graph(tf):
         state_batch_plh = tf.placeholder(shape=[BATCH_SIZE, STATE_SPACE], dtype=tf.float32, name="state_batch_plh")
         terminate_batch_plh = tf.placeholder(shape=[BATCH_SIZE, 1], dtype=tf.float32, name="terminate_batch_plh")
         reward_batch_plh = tf.placeholder(shape=[BATCH_SIZE, 1], dtype=tf.float32, name="reward_batch_plh")
-        action_batch_plh = tf.placeholder(shape=[BATCH_SIZE, NUM_ACTIONS], dtype=tf.float32, name="action_batch_bplh")
+        action_batch_plh = tf.placeholder(shape=[BATCH_SIZE, NUM_ACTIONS], dtype=tf.float32, name="action_batch_plh")
         with tf.variable_scope(scope, reuse=True):
             hidden = tf.layers.dense(state_batch_plh, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
@@ -145,10 +145,10 @@ def build_graph(tf):
         context_scope = "context"
         with tf.variable_scope(context_scope):
             # tf.cast(tf.expand_dims(tf.argmax(policy, axis=1), axis=1), tf.float32)
-            context_input = tf.concat([state_plh, terminate_plh, reward_plh,  action_plh, memory_tile, tf.square(action_plh - policy) / (2 * tf.square(tf.exp(sigma_tile)))], axis=1)
+            context_input = tf.concat([state_plh, terminate_plh, reward_plh,  action_plh, memory_tile, policy, sigma_tile], axis=1)# tf.square(action_plh - policy) / (2 * tf.square(tf.exp(sigma_tile)))], axis=1)
             context_input = tf.expand_dims(context_input, axis=0)
-            hidden = tf.layers.conv1d(context_input, 10, 8, strides=7, activation=tf.nn.leaky_relu, padding="same")
-            hidden = tf.layers.conv1d(hidden, 10, 4, strides=2, activation=tf.nn.leaky_relu, padding="same")
+            hidden = tf.layers.conv1d(context_input, 16, 6, strides=5, activation=tf.nn.leaky_relu, padding="same")
+            hidden = tf.layers.conv1d(hidden, 32, 4, strides=2, activation=tf.nn.leaky_relu, padding="same")
             context = tf.layers.conv1d(hidden, 32, int(hidden.get_shape()[1]), strides=1, activation=tf.nn.leaky_relu, padding="valid")
 
 
@@ -167,7 +167,7 @@ def build_graph(tf):
         #samples_plh = tf.placeholder(shape=[BATCH_SIZE, bar.get_shape()[1]], dtype=tf.float32, name="samples_plh")
         context_plh = tf.placeholder(shape=context.get_shape(), dtype=tf.float32, name="context_plh")
         # tf.cast(tf.expand_dims(tf.argmax(policy_batch, axis=1), axis=1), tf.float32)
-        loss_input = tf.concat([state_batch_plh, terminate_batch_plh, reward_batch_plh, action_batch_plh,  memory_tile_batch, tf.square(action_batch_plh - policy_batch) / (2 * tf.square(tf.exp(sigma_tile_batch)))], axis=1)
+        loss_input = tf.concat([state_batch_plh, terminate_batch_plh, reward_batch_plh, action_batch_plh,  memory_tile_batch, policy_batch, sigma_tile_batch], axis=1)#tf.square(action_batch_plh - policy_batch) / (2 * tf.square(tf.exp(sigma_tile_batch)))], axis=1)
 
         """ loss network operates on BATCH_SIZE buffer samples
         these samples include M {state, termination_signal pairs}
@@ -259,7 +259,7 @@ NUM_WORKERS = 256
 TRAJ_SAMPLES = 3
 GAMMA = 0.95
 V = 64
-SIGMA = 0.01
+SIGMA = 0.15
 NUM_EPOCHS = 5000
 LEARNING_RATE_LOSS_ES = 1e-2
 LEARNING_DECAY = 0.99
@@ -432,7 +432,7 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                             #random.shuffle(joint)
                             state_batch, term_batch, reward_batch, action_batch = zip(*joint)
 
-                            num_batches = SAMPLE_SIZE % BATCH_SIZE
+                            num_batches = int(SAMPLE_SIZE / BATCH_SIZE)
                             for i in range(num_batches):
 
                                 state_mb = state_batch[BATCH_SIZE * i:BATCH_SIZE * (i + 1)]
@@ -445,15 +445,16 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                                 if thread_lock and gpu_lock:
                                     with thread_lock:
                                         with gpu_lock:
-                                            sess.run(policy_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": state_mb,
-                                                "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "action_batch_plh:0": action_mb, "learning_rate_policy_plh:0": [learning_rate_policy]})
                                             sess.run(memory_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": state_mb,
-                                                "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "action_batch_plh:0": action_mb, "learning_rate_memory_plh:0": [learning_rate_memory]})
+                                                "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "action_batch_plh:0": action_mb})
+                                            sess.run(policy_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": state_mb,
+                                                "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "action_batch_plh:0": action_mb})
+
                                 else:
                                             sess.run(policy_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": state_mb,
-                                                "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "action_batch_plh:0": action_mb, "learning_rate_policy_plh:0": [learning_rate_policy]})
+                                                "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "action_batch_plh:0": action_mb})
                                             sess.run(memory_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": state_mb,
-                                                "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "action_batch_plh:0": action_mb, "learning_rate_memory_plh:0": [learning_rate_memory]})
+                                                "terminate_batch_plh:0": term_mb, "reward_batch_plh:0": reward_mb, "action_batch_plh:0": action_mb})
 
                                 learning_rate_policy *= LEARNING_DECAY
                                 learning_rate_memory *= LEARNING_DECAY
@@ -622,6 +623,7 @@ def run_outer_loop():
             loss_es_params_values = sess.run(loss_es_params_dict)
             with open(ENV + "-epg_loss_params.pkl", "wb") as f:
                 pickle.dump(loss_es_params_values, f, pickle.HIGHEST_PROTOCOL)
+                #loss_es_params_values = pickle.load(f)
             #return loss_es_params_values
             for e in range(NUM_EPOCHS):
                 # construct perturbed phi (loss) params
