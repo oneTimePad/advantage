@@ -22,8 +22,8 @@ MEMORY_SIZE = 32
 SAMPLE_SIZE = 64 # M
 NUM_ACTIONS = 17
 STATE_SPACE = 376
-BATCH_SIZE = 64
-L2_BETA = 1e-4
+BATCH_SIZE = 32
+L2_BETA = 1e-3
 policy_lr_init = 1e-3
 memory_lr_init = 1e-3
 loss_es_lr_init = 1e-2
@@ -145,7 +145,7 @@ def build_graph(tf):
         context_scope = "context"
         with tf.variable_scope(context_scope):
             # tf.cast(tf.expand_dims(tf.argmax(policy, axis=1), axis=1), tf.float32)
-            context_input = tf.concat([state_plh, terminate_plh, reward_plh,  action_plh, memory_tile, policy, sigma_tile], axis=1)# tf.square(action_plh - policy) / (2 * tf.square(tf.exp(sigma_tile)))], axis=1)
+            context_input = tf.concat([state_plh, terminate_plh,  action_plh, memory_tile, policy, sigma_tile], axis=1)# tf.square(action_plh - policy) / (2 * tf.square(tf.exp(sigma_tile)))], axis=1)
             context_input = tf.expand_dims(context_input, axis=0)
             hidden = tf.layers.conv1d(context_input, 16, 6, strides=5, activation=tf.nn.leaky_relu, padding="same")
             hidden = tf.layers.conv1d(hidden, 32, 4, strides=2, activation=tf.nn.leaky_relu, padding="same")
@@ -167,7 +167,7 @@ def build_graph(tf):
         #samples_plh = tf.placeholder(shape=[BATCH_SIZE, bar.get_shape()[1]], dtype=tf.float32, name="samples_plh")
         context_plh = tf.placeholder(shape=context.get_shape(), dtype=tf.float32, name="context_plh")
         # tf.cast(tf.expand_dims(tf.argmax(policy_batch, axis=1), axis=1), tf.float32)
-        loss_input = tf.concat([state_batch_plh, terminate_batch_plh, reward_batch_plh, action_batch_plh,  memory_tile_batch, policy_batch, sigma_tile_batch], axis=1)#tf.square(action_batch_plh - policy_batch) / (2 * tf.square(tf.exp(sigma_tile_batch)))], axis=1)
+        loss_input = tf.concat([state_batch_plh, terminate_batch_plh,  action_batch_plh,  memory_tile_batch, policy_batch, sigma_tile_batch], axis=1)#tf.square(action_batch_plh - policy_batch) / (2 * tf.square(tf.exp(sigma_tile_batch)))], axis=1)
 
         """ loss network operates on BATCH_SIZE buffer samples
         these samples include M {state, termination_signal pairs}
@@ -259,7 +259,7 @@ NUM_WORKERS = 256
 TRAJ_SAMPLES = 3
 GAMMA = 0.95
 V = 64
-SIGMA = 0.15
+SIGMA = 0.01
 NUM_EPOCHS = 5000
 LEARNING_RATE_LOSS_ES = 1e-2
 LEARNING_DECAY = 0.99
@@ -267,7 +267,7 @@ SIGMA_DECAY = 1.0
 NUM_PROCS = 8
 ENV = "Humanoid-v1"
 
-def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, average_returns, run_sim=False):
+def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, average_returns, run_sim=False, num_samples=None, num_epochs=None):
     """ Inner Loop run for each worker
         Samples from MDP and follows a randomly initialized policy
         updates both memory and policy every M steps
@@ -285,7 +285,7 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
     #env = gym.make('BipedalWalker-v2')
     global ENV
     env = gym.make(ENV)
-    tf.reset_default_graph()
+    #tf.reset_default_graph()
     epg_graph,  loss_es_assign_plhs, loss_es_params_dict, loss_es_grad_plhs, loss_es_gradients,  policy_gradients, memory_gradients, loss, context = build_graph(tf)
 
     with epg_graph.as_default() as g:
@@ -295,7 +295,7 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
         config.gpu_options.allow_growth=True
 
         with tf.Session(graph=g, config=config) as sess:
-            for _ in range(NUM_EPOCHS):
+            for _ in range(NUM_EPOCHS if not num_epochs else num_epochs):
                 # buffers for state, term_signal, reward
                 state_buffer = collections.deque([], maxlen=BUFFER_SIZE)
                 term_buffer = collections.deque([], maxlen=BUFFER_SIZE)
@@ -401,7 +401,7 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                         action_running_stddev = ((num_actions - 1) * action_running_stddev + (a - old_mean_action) * (a - action_running_average)) / num_actions if old_mean_action.any() else np.array([0] * NUM_ACTIONS)
 
                         if sum(action_running_stddev > 0) != 0:
-                            a = a#(a - action_running_average) / np.sqrt(action_running_stddev + 1e-5)
+                            a = (a - action_running_average) / np.sqrt(action_running_stddev + 1e-5)
 
                         state_buffer.append(s)
                         term_buffer.append([done])
@@ -414,7 +414,7 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                         if t >= NUM_STEPS:
                             break
                         if done:
-                            print("TID %d REWARDS %d STEPS %d REMAINING %d" %(tid, rewards, steps, t))
+                            print("REWARDS %d STEPS %d REMAINING %d" %(rewards, steps, t))
 
                         # once we have enoguh samples perform policy and mem param update
                         if  t == BUFFER_SIZE or (t >= BUFFER_SIZE and t % SAMPLE_SIZE == 0):
@@ -465,7 +465,7 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                 """
 
                 returns = []
-                for tr in range(TRAJ_SAMPLES):
+                for tr in range(TRAJ_SAMPLES if not num_samples else num_samples):
                     s = env.reset()
                     done = False
                     R = 0
@@ -483,8 +483,6 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
 
 
                     #num_states = 0
-
-
 
                     while done != True:
                         num_states += 1
@@ -521,7 +519,6 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
 
                         if reward_running_stddev != 0 :
                             reward = (reward - reward_running_average) / np.sqrt(reward_running_stddev)
-
                         """
                         reward_total += reward
                         if run_sim:
@@ -530,14 +527,14 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                         steps += 1
 
 
-                    print("TID %d TRAJ REWARDS %d STEPS %d REMAINING %d" %(tid, reward_total, steps, tr))
+                    print("TRAJ REWARDS %d STEPS %d REMAINING %d" %(reward_total, steps, tr))
                     for i in reversed(range(len(rewards))):
                         R = rewards[i] + GAMMA * R
                     returns.append(R)
                 if average_returns is not None:
                     average_returns[tid % int(NUM_WORKERS/NUM_PROCS)] = (tid, sum(returns) / TRAJ_SAMPLES)
-                with thread_lock:
-                    loss_params[tid % int(NUM_WORKERS/NUM_PROCS)] = None
+                    with thread_lock:
+                        loss_params[tid % int(NUM_WORKERS/NUM_PROCS)] = None
     epg_graph = None
     g = None
     loss_es_assign_plhs = None
@@ -548,7 +545,14 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
     context = None
     gc.collect()
 
+def relative_ranks(x):
+    def ranks(x):
+        ranks = np.zeros(len(x), dtype=int)
+        ranks[x.argsort()] = np.arange(len(x))
+        return ranks
 
+    y = ranks(x.ravel()).reshape(x.shape).astype(np.float32)
+    return y / (x.size - 1.) - 0.5
 
 def run_outer_loop():
     """ Runs the outer loop of the algorithm
@@ -621,9 +625,9 @@ def run_outer_loop():
         with tf.Session(config=config) as sess:
             sess.run(tf.global_variables_initializer())#tf.variables_initializer(loss_es_params_dict.values()))
             loss_es_params_values = sess.run(loss_es_params_dict)
-            with open(ENV + "-epg_loss_params.pkl", "wb") as f:
-                pickle.dump(loss_es_params_values, f, pickle.HIGHEST_PROTOCOL)
-                #loss_es_params_values = pickle.load(f)
+            with open(ENV + "-epg_loss_params.pkl", "rb") as f:
+                #pickle.dump(loss_es_params_values, f, pickle.HIGHEST_PROTOCOL)
+                loss_es_params_values = pickle.load(f)
             #return loss_es_params_values
             for e in range(NUM_EPOCHS):
                 # construct perturbed phi (loss) params
@@ -656,13 +660,19 @@ def run_outer_loop():
                     workers += int(NUM_WORKERS/NUM_PROCS)
 
                 loss_es_grad_feed_dict = {}
+                average_returns = np.array(average_returns)
+                average_returns = list(relative_ranks(average_returns))
+                print(average_returns)
+                #average_returns = (average_returns - np.mean(average_returns)) / np.std(average_returns)
+                #average_returns[np.sign(average_returns) == -1] = 0.0
+                #average_returns = list(average_returns)
                 # compute ES gradients and update
                 for param in loss_es_params_values.keys():
                     F = []
                     num_workers_per_set = int(NUM_WORKERS / V) # guarantee divis
-                    for i in range(num_workers_per_set):
+                    for i in range(V):
                         F.append((sum(average_returns[num_workers_per_set *i: num_workers_per_set*(i+1)])/(num_workers_per_set)) * normal_vectors[i][param])
-                    grad = sum(F)/(SIGMA * V)
+                    grad = sum(F)/(V)
                     loss_es_grad_feed_dict[loss_es_grad_plhs[param]] = grad
                 sess.run(loss_es_gradients, feed_dict=loss_es_grad_feed_dict)
                 #LEARNING_RATE_LOSS_ES *= LEARNING_DECAY
@@ -672,12 +682,13 @@ def run_outer_loop():
                 #    sess.run(loss_es_assign_plhs[param][1], feed_dict={loss_es_assign_plhs[param][0]: loss_es_params_values[param]})
 
 
-                print("EPOCH %d " % e, average_returns)
-                print("AVERAGE %f" % (sum(average_returns)/ NUM_WORKERS))
+                print("EPOCH %d " % e)#, average_returns)
+                #print("AVERAGE %f" % (sum(average_returns)/ NUM_WORKERS))
                 loss_es_params_values = sess.run(loss_es_params_dict)
-                #run_inner_loop(None, None, gym, tf, 0,  None, loss_es_params_values, None, run_sim=True)
                 with open(ENV + "-epg_loss_params.pkl", "wb") as f:
                     pickle.dump(loss_es_params_values, f, pickle.HIGHEST_PROTOCOL)
+                run_inner_loop(None, None, gym, tf, 0,  None, [loss_es_params_values], None, run_sim=True, num_samples=16, num_epochs=1)
+
                 gc.collect()
             for event in events:
                 event.clear()
