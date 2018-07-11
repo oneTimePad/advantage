@@ -20,9 +20,9 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 BUFFER_SIZE = 1024 # N
 MEMORY_SIZE = 32
 SAMPLE_SIZE = 64 # M
-NUM_ACTIONS = 17
-STATE_SPACE = 376
-BATCH_SIZE = 32
+NUM_ACTIONS = 4#17
+STATE_SPACE = 24#376
+BATCH_SIZE = 64
 L2_BETA = 1e-3
 policy_lr_init = 1e-3
 memory_lr_init = 1e-3
@@ -256,16 +256,17 @@ def build_graph(tf):
 # Hyperparameters
 NUM_STEPS = 128 * SAMPLE_SIZE # U
 NUM_WORKERS = 256
-TRAJ_SAMPLES = 3
+TRAJ_SAMPLES = 7
 GAMMA = 0.95
 V = 64
-SIGMA = 0.01
+SIGMA = 0.05
 NUM_EPOCHS = 5000
 LEARNING_RATE_LOSS_ES = 1e-2
 LEARNING_DECAY = 0.99
 SIGMA_DECAY = 1.0
 NUM_PROCS = 8
 ENV = "Humanoid-v1"
+ENV = "BipedalWalker-v2"
 
 def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, average_returns, run_sim=False, num_samples=None, num_epochs=None):
     """ Inner Loop run for each worker
@@ -625,9 +626,9 @@ def run_outer_loop():
         with tf.Session(config=config) as sess:
             sess.run(tf.global_variables_initializer())#tf.variables_initializer(loss_es_params_dict.values()))
             loss_es_params_values = sess.run(loss_es_params_dict)
-            with open(ENV + "-epg_loss_params.pkl", "rb") as f:
-                #pickle.dump(loss_es_params_values, f, pickle.HIGHEST_PROTOCOL)
-                loss_es_params_values = pickle.load(f)
+            with open(ENV + "-epg_loss_params.pkl", "wb") as f:
+                pickle.dump(loss_es_params_values, f, pickle.HIGHEST_PROTOCOL)
+                #loss_es_params_values = pickle.load(f)
             #return loss_es_params_values
             for e in range(NUM_EPOCHS):
                 # construct perturbed phi (loss) params
@@ -662,7 +663,7 @@ def run_outer_loop():
                 loss_es_grad_feed_dict = {}
                 average_returns = np.array(average_returns)
                 average_returns = list(relative_ranks(average_returns))
-                print(average_returns)
+                #print(average_returns)
                 #average_returns = (average_returns - np.mean(average_returns)) / np.std(average_returns)
                 #average_returns[np.sign(average_returns) == -1] = 0.0
                 #average_returns = list(average_returns)
