@@ -237,7 +237,7 @@ def build_graph(tf):
 
         loss_es_grad_plhs = {}
         loss_es_optimizer = tf.train.AdamOptimizer(loss_es_lr_init, beta1=0.0)
-        l2_loss = sum([ tf.reduce_mean(tf.nn.l2_loss(param)) for param in loss_es_params ])
+        l2_loss = tf.reduce_mean(sum([tf.nn.l2_loss(param) for param in loss_es_params ]))
 
         l2_grads_and_vars = loss_es_optimizer.compute_gradients(l2_loss, loss_es_params)
         total_grads_and_vars = []
@@ -340,7 +340,7 @@ PPO_LAMBDA = 0.95
 ALPHA_DECAY = 0.95
 ENV = "Humanoid-v1"
 
-def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, average_returns, run_sim=False, num_samples=None, num_epochs=None):
+def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, average_returns, run_sim=False, num_samples=None, num_epochs=None, alpha=1.0):
     """ Inner Loop run for each worker
         Samples from MDP and follows a randomly initialized policy
         updates both memory and policy every M steps
@@ -358,7 +358,7 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
     #env = gym.make('BipedalWalker-v2')
     global ENV, PPO_LAMBDA, PPO_GAMMA, ES_GAMMA#, PPO_BETA_HIGH, PPO_BETA_LOW, PPO_KL_TARGET, PPO_ALPHA, PPO_HORIZON
 
-    ALPHA = 1.0
+    ALPHA = alpha
 
     env = gym.make(ENV)
     #tf.reset_default_graph()
@@ -804,12 +804,13 @@ def run_outer_loop():
                     grad = sum(F)/(V)
                     loss_es_grad_feed_dict[loss_es_grad_plhs[param]] = grad
                 sess.run(loss_es_gradients, feed_dict=loss_es_grad_feed_dict)
+                loss_es_params_values = sess.run(loss_es_params_dict)
 
                 print("EPOCH %d " % e)
-                loss_es_params_values = sess.run(loss_es_params_dict)
+
                 with open(ENV + "-epg_loss_params.pkl", "wb") as f:
                     pickle.dump(loss_es_params_values, f, pickle.HIGHEST_PROTOCOL)
-                #run_inner_loop(None, None, gym, tf, 0,  None, [loss_es_params_values], None, run_sim=True, num_samples=16, num_epochs=1)
+                run_inner_loop(None, None, gym, tf, 0,  None, [loss_es_params_values], None, run_sim=True, num_samples=16, num_epochs=1, alpha=0)
 
                 gc.collect()
             for event in events:
