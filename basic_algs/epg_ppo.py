@@ -40,10 +40,11 @@ def build_graph(tf):
         """ The ES memory takes as input a vector of ones.
         Acts as a vector of biases.
         """
+        initializer = tf.variance_scaling_initializer(scale=(0.01), mode="fan_out")
         memory_scope = "memory"
         with tf.variable_scope(memory_scope):
             # memory units
-            memory = tf.layers.dense(tf.ones([1, 2 * MEMORY_SIZE]), MEMORY_SIZE, activation=tf.nn.tanh)
+            memory = tf.layers.dense(tf.ones([1, 2 * MEMORY_SIZE]), MEMORY_SIZE, activation=tf.nn.tanh, kernel_initializer=initializer)
 
         # replicate memory to concate with M (BUFFER_SIZE) samples
         memory_tile = tf.tile(memory, [BUFFER_SIZE, 1])
@@ -74,18 +75,18 @@ def build_graph(tf):
         """ Policy Network operates on state
         operates on the state samples from the buffer N for context computation
         """
-        initializer = tf.contrib.layers.variance_scaling_initializer()
+
         policy_scope = "policy"
         with tf.variable_scope(policy_scope) as scope:
-            hidden = tf.layers.dense(state_plh, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
+            hidden = tf.layers.dense(state_plh, 64, activation=tf.nn.tanh, kernel_initializer=tf.variance_scaling_initializer( mode="fan_out"))
+            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=tf.variance_scaling_initializer( mode="fan_out"))
+            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             policy = tf.layers.dense(hidden, NUM_ACTIONS, activation=None, kernel_initializer=initializer)
             #policy = tf.nn.softmax(policy, axis=1)
 
             #policy = tf.nn.tanh(policy)
-            sigma = tf.layers.dense(tf.ones([1, NUM_ACTIONS]), NUM_ACTIONS, activation=None, use_bias=False, kernel_initializer=initializer)
+            sigma = tf.layers.dense(tf.ones([1, NUM_ACTIONS]), NUM_ACTIONS, activation=None, use_bias=False, kernel_initializer=tf.zeros_initializer())
             #sigma = tf.nn.relu(sigma)
             sigma_tile = tf.tile(sigma, [BUFFER_SIZE, 1])
         """ Policy Network operates on state
@@ -93,12 +94,12 @@ def build_graph(tf):
         """
         state_sample_plh = tf.placeholder(shape=[1, STATE_SPACE], dtype=tf.float32, name="state_sample_plh")
         with tf.variable_scope(scope, reuse=True):
-            hidden = tf.layers.dense(state_sample_plh, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
+            hidden = tf.layers.dense(state_sample_plh, 64, activation=tf.nn.tanh, kernel_initializer=tf.variance_scaling_initializer( mode="fan_out"))
+            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=tf.variance_scaling_initializer( mode="fan_out"))
+            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             policy_sample = tf.layers.dense(hidden, NUM_ACTIONS, activation=None, kernel_initializer=initializer)
-            sigma_sample = tf.layers.dense(tf.ones([1, NUM_ACTIONS]), NUM_ACTIONS, activation=None, use_bias=False, kernel_initializer=initializer)
+            sigma_sample = tf.layers.dense(tf.ones([1, NUM_ACTIONS]), NUM_ACTIONS, activation=None, use_bias=False, kernel_initializer=tf.zeros_initializer())
             #policy_sample = tf.nn.softmax(policy_sample, axis=1)
             #policy_sample = tf.nn.tanh(policy_sample)
             # sample action
@@ -113,12 +114,12 @@ def build_graph(tf):
         action_batch_plh = tf.placeholder(shape=[BATCH_SIZE, NUM_ACTIONS], dtype=tf.float32, name="action_batch_plh")
         unnorm_action_batch_plh = tf.placeholder(shape=[BATCH_SIZE, NUM_ACTIONS], dtype=tf.float32, name="unnorm_action_batch_plh")
         with tf.variable_scope(scope, reuse=True):
-            hidden = tf.layers.dense(state_batch_plh, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
+            hidden = tf.layers.dense(state_batch_plh, 64, activation=tf.nn.tanh, kernel_initializer=tf.variance_scaling_initializer( mode="fan_out"))
+            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=tf.variance_scaling_initializer( mode="fan_out"))
+            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             policy_batch = tf.layers.dense(hidden, NUM_ACTIONS, activation=None, kernel_initializer=initializer)
-            sigma_batch = tf.layers.dense(tf.ones([1, NUM_ACTIONS]), NUM_ACTIONS, activation=None, use_bias=False, kernel_initializer=initializer)
+            sigma_batch = tf.layers.dense(tf.ones([1, NUM_ACTIONS]), NUM_ACTIONS, activation=None, use_bias=False, kernel_initializer=tf.zeros_initializer())
 
             sigma_tile_batch = tf.tile(sigma_batch, [BATCH_SIZE, 1])
             #policy_batch = tf.nn.softmax(policy_batch, axis=1)
@@ -130,12 +131,12 @@ def build_graph(tf):
         """ Old policy for computing policy improvement ratio for weighted average advantage for PPO """
         policy_old_scope = "policy_old"
         with tf.variable_scope(policy_old_scope):
-            hidden = tf.layers.dense(state_batch_plh, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
+            hidden = tf.layers.dense(state_batch_plh, 64, activation=tf.nn.tanh, kernel_initializer=tf.variance_scaling_initializer( mode="fan_out"))
+            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=tf.variance_scaling_initializer( mode="fan_out"))
+            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
             policy_old = tf.layers.dense(hidden, NUM_ACTIONS, activation=None, kernel_initializer=initializer)
-            sigma_old = tf.layers.dense(tf.ones([1, NUM_ACTIONS]), NUM_ACTIONS, activation=None, use_bias=False, kernel_initializer=initializer)
+            sigma_old = tf.layers.dense(tf.ones([1, NUM_ACTIONS]), NUM_ACTIONS, activation=None, use_bias=False, kernel_initializer=tf.zeros_initializer())
             sigma_tile_old = tf.tile(sigma_old, [BATCH_SIZE, 1])
 
         policy_old_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=policy_old_scope)
@@ -147,8 +148,8 @@ def build_graph(tf):
         value_ppo_scope = "value_ppo"
         q_values_plh = tf.placeholder(shape=[BATCH_SIZE, 1], dtype=tf.float32, name="q_values_plh")
         with tf.variable_scope(value_ppo_scope) as scope:
-            hidden = tf.layers.dense(state_batch_plh, 64, activation=tf.nn.leaky_relu, kernel_initializer=initializer)
-            hidden = tf.layers.dense(hidden, 64, activation=tf.nn.leaky_relu, kernel_initializer=initializer)
+            hidden = tf.layers.dense(state_batch_plh, 64, activation=tf.nn.tanh, kernel_initializer=tf.variance_scaling_initializer( mode="fan_out"))
+            hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=tf.variance_scaling_initializer(mode="fan_out"))
             #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.leaky_relu, kernel_initializer=initializer)
 
             value_ppo = tf.layers.dense(hidden, 1, activation=None, kernel_initializer=initializer)
@@ -158,8 +159,8 @@ def build_graph(tf):
 
         state_sample_size_plh = tf.placeholder(shape=[SAMPLE_SIZE, STATE_SPACE], dtype=tf.float32, name="state_sample_size_plh")
         with tf.variable_scope(scope, reuse=True):
-            hidden = tf.layers.dense(state_sample_size_plh, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
-            hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=initializer)
+            hidden = tf.layers.dense(state_sample_size_plh, 64, activation=tf.nn.tanh, kernel_initializer=tf.variance_scaling_initializer(mode="fan_out"))
+            hidden = tf.layers.dense(hidden, 64, activation=tf.nn.tanh, kernel_initializer=tf.variance_scaling_initializer(mode="fan_out"))
             #hidden = tf.layers.dense(hidden, 64, activation=tf.nn.leaky_relu, kernel_initializer=initializer)
             value_ppo_sample = tf.layers.dense(hidden, 1, activation=None, kernel_initializer=initializer)
 
@@ -191,12 +192,15 @@ def build_graph(tf):
         context_scope = "context"
         with tf.variable_scope(context_scope):
             # tf.cast(tf.expand_dims(tf.argmax(policy, axis=1), axis=1), tf.float32)
-            context_input = tf.concat([state_plh, terminate_plh, reward_plh, action_plh, memory_tile, policy, sigma_tile], axis=1)# tf.square(action_plh - policy) / (2 * tf.square(tf.exp(sigma_tile)))], axis=1)
+            context_input = tf.concat([state_plh, action_plh, reward_plh, terminate_plh, policy, sigma_tile, memory_tile], axis=1)# tf.square(action_plh - policy) / (2 * tf.square(tf.exp(sigma_tile)))], axis=1)
             context_input = tf.expand_dims(context_input, axis=0)
-            hidden = tf.layers.conv1d(context_input, 16, 6, strides=5, activation=tf.nn.leaky_relu, padding="same")
-            hidden = tf.layers.conv1d(hidden, 32, 4, strides=2, activation=tf.nn.leaky_relu, padding="same")
-            context = tf.layers.conv1d(hidden, 32, int(hidden.get_shape()[1]), strides=1, activation=tf.nn.leaky_relu, padding="valid")
-
+            #context_input = tf.transpose(context_input, perm=[0, 2, 1])
+            hidden = tf.layers.conv1d(context_input, 16, 6, strides=5, activation=tf.nn.leaky_relu, padding="valid", kernel_initializer=tf.variance_scaling_initializer(scale=0.01))
+            hidden = tf.layers.conv1d(hidden, 32, 4, strides=2, activation=tf.nn.leaky_relu, padding="valid", kernel_initializer=tf.variance_scaling_initializer(scale=0.01))
+            context = tf.layers.conv1d(hidden, 32, int(hidden.get_shape()[1]), strides=1, activation=None, padding="valid", kernel_initializer=tf.variance_scaling_initializer(scale=0.01))
+            #hidden = (tf.reduce_sum(hidden, axis=(0, 2))) / int(hidden.get_shape()[0]) / int(hidden.get_shape()[2])
+            #hidden = tf.expand_dims(hidden, axis=0)
+            #context = tf.layers.dense(hidden, 32, activation=None)
 
         context = tf.squeeze(context, axis=0)
 
@@ -213,7 +217,7 @@ def build_graph(tf):
         #samples_plh = tf.placeholder(shape=[BATCH_SIZE, bar.get_shape()[1]], dtype=tf.float32, name="samples_plh")
         context_plh = tf.placeholder(shape=context.get_shape(), dtype=tf.float32, name="context_plh")
         # tf.cast(tf.expand_dims(tf.argmax(policy_batch, axis=1), axis=1), tf.float32)
-        loss_input = tf.concat([state_batch_plh, terminate_batch_plh, reward_batch_plh,  action_batch_plh,  memory_tile_batch, policy_batch, sigma_tile_batch], axis=1)#tf.square(action_batch_plh - policy_batch) / (2 * tf.square(tf.exp(sigma_tile_batch)))], axis=1)
+        loss_input = tf.concat([state_batch_plh, action_batch_plh, reward_batch_plh, terminate_batch_plh, context_plh, policy_batch, sigma_tile_batch,  memory_tile_batch], axis=1)#tf.square(action_batch_plh - policy_batch) / (2 * tf.square(tf.exp(sigma_tile_batch)))], axis=1)
 
         """ loss network operates on BATCH_SIZE buffer samples
         these samples include M {state, termination_signal pairs}
@@ -222,8 +226,8 @@ def build_graph(tf):
         loss_scope = "loss"
         with tf.variable_scope(loss_scope):
 
-            hidden = tf.layers.dense(loss_input, 16, activation=tf.nn.leaky_relu, kernel_initializer=initializer)
-            loss  = tf.layers.dense(hidden, 1, activation=None, kernel_initializer=initializer, name="loss")
+            hidden = tf.layers.dense(loss_input, 16, activation=tf.nn.leaky_relu, kernel_initializer=tf.variance_scaling_initializer(scale=0.01))#, kernel_initializer=initializer)
+            loss  = tf.layers.dense(hidden, 1, activation=None, name="loss", kernel_initializer=tf.variance_scaling_initializer(scale=0.01))#, kernel_initializer=initializer)
 
         loss_es_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=context_scope) + \
             tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=loss_scope)
@@ -238,7 +242,7 @@ def build_graph(tf):
 
         loss_es_grad_plhs = {}
         loss_es_optimizer = tf.train.AdamOptimizer(loss_es_lr_init, beta1=0.0)
-        l2_loss = tf.reduce_mean(sum([tf.nn.l2_loss(param) for param in loss_es_params ]))
+        l2_loss = sum([tf.nn.l2_loss(param) for param in loss_es_params ])
 
         l2_grads_and_vars = loss_es_optimizer.compute_gradients(l2_loss, loss_es_params)
         total_grads_and_vars = []
@@ -246,7 +250,7 @@ def build_graph(tf):
             l2_gradient, param = l2_grad_and_var
             param_grad_plh = tf.placeholder(shape=param.get_shape(), dtype=tf.float32)
             loss_es_grad_plhs[param.name] = param_grad_plh
-            total_grads_and_vars.append((param_grad_plh - L2_BETA * l2_gradient, param))
+            total_grads_and_vars.append((-param_grad_plh + L2_BETA * l2_gradient, param))
         loss_es_gradients = loss_es_optimizer.apply_gradients(total_grads_and_vars)
 
 
@@ -318,11 +322,11 @@ def build_graph(tf):
 
 # Hyperparameters
 NUM_STEPS = 128 * SAMPLE_SIZE # U
-NUM_WORKERS = 256
-TRAJ_SAMPLES = 7
+NUM_WORKERS = 8
+TRAJ_SAMPLES = 3
 ES_GAMMA = 1.0
-PPO_GAMMA = 0.99
-V = 64
+PPO_GAMMA = 0.75
+V = 8
 SIGMA = 0.01
 NUM_EPOCHS = 5000
 LEARNING_RATE_LOSS_ES = 1e-2
@@ -337,11 +341,12 @@ PPO_LAMBDA = 0.95
 #PPO_ALPHA = 1.2
 
 #PPO_HORIZON = 1
-
-ALPHA_DECAY = 0.95
+EPSILON = 1e-2
+ALPHA_DECAY = 0.99
 ENV = "Humanoid-v1"
+DECAY_ALPHA_INT = 1
 
-def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, average_returns, run_sim=False, num_samples=None, num_epochs=None, alpha=1.0):
+def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, average_returns, run_sim=False, num_samples=None, num_epochs=None, alpha=0.99):
     """ Inner Loop run for each worker
         Samples from MDP and follows a randomly initialized policy
         updates both memory and policy every M steps
@@ -375,7 +380,8 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
         config.gpu_options.allow_growth=True
 
         with tf.Session(graph=g, config=config) as sess:
-            for _ in range(NUM_EPOCHS if not num_epochs else num_epochs):
+            for epoch in range(NUM_EPOCHS if not num_epochs else num_epochs):
+                epoch = epoch + 1
                 # buffers for state, term_signal, reward
                 state_buffer = collections.deque([[0.0] * STATE_SPACE] * BUFFER_SIZE, maxlen=BUFFER_SIZE)
                 term_buffer = collections.deque([[0.0]] * BUFFER_SIZE, maxlen=BUFFER_SIZE)
@@ -391,7 +397,8 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
 
                 state_running_average  = np.array([0.0] * STATE_SPACE)
                 reward_running_average = 0.0
-                state_running_variance = np.array([])
+
+                state_running_variance = np.array([0.0] * STATE_SPACE)
                 action_running_average = np.array([0.0] * NUM_ACTIONS)
 
 
@@ -406,13 +413,13 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                 num_terms = 0
                 gc.collect()
 
-                sum_states_squared = 0.0
+                sum_states_squared = [EPSILON] * STATE_SPACE
                 sum_states = 0.0
 
-                sum_actions_squared = 0.0
+                sum_actions_squared = [EPSILON] * NUM_ACTIONS
                 sum_actions = 0.0
 
-                sum_rewards_squared = 0.0
+                sum_rewards_squared = EPSILON
                 sum_rewards = 0.0
 
                 sum_terms_squared = 0.0
@@ -458,8 +465,8 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
 
 
 
-                        if num_states > 1 and state_running_variance.any():
-                            s = (s - state_running_average) / np.sqrt(state_running_variance + 1e-5)
+                        #if num_states > 1 and state_running_variance.any():
+                        s = (s - state_running_average) / np.sqrt(np.maximum(state_running_variance, 0.01))
 
 
                         if thread_lock and gpu_lock:
@@ -517,10 +524,10 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                         if t % SAMPLE_SIZE == 0:
 
                             state_running_mean = (1 / num_states) * sum_states
-                            state_running_variance = (1/num_states) * (sum_states_squared - ((sum_states) ** 2) / num_states)
+                            state_running_variance = (1/num_states) * (sum_states_squared - ((sum_states ** 2) / num_states))
 
                             reward_running_mean = (1 / num_rewards) * sum_rewards
-                            reward_running_variance = (1 / num_rewards) * (sum_rewards_squared - (((sum_rewards) ** 2)/ num_rewards))
+                            reward_running_variance = (1 / num_rewards) * (sum_rewards_squared - ((sum_rewards ** 2)/ num_rewards))
 
                             action_running_mean = (1 / num_actions) * sum_actions
                             action_running_variance = (1 / num_actions) * (sum_actions_squared - ((sum_actions ** 2) / num_actions))
@@ -529,16 +536,16 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                             term_running_variance = (1 / num_terms) * (sum_terms_squared - ((sum_terms ** 2) / num_terms))
 
                             norm_state_buffer = np.array(list(state_buffer))
-                            norm_state_buffer = (norm_state_buffer - state_running_mean) / np.sqrt(state_running_variance + 1e-8)
+                            norm_state_buffer = (norm_state_buffer - state_running_mean) / np.sqrt(np.maximum(state_running_variance, 0.01))
 
                             norm_reward_buffer = np.array(list(reward_buffer))
-                            norm_reward_buffer = (norm_reward_buffer - reward_running_mean) / np.sqrt(reward_running_variance + 1e-8)
+                            #norm_reward_buffer = (norm_reward_buffer - reward_running_mean) / np.sqrt(np.maximum(reward_running_variance, 0.01))
 
                             norm_action_buffer = np.array(list(action_buffer))
-                            norm_action_buffer = (norm_action_buffer - action_running_mean) / np.sqrt(action_running_variance + 1e-8)
+                            norm_action_buffer = (norm_action_buffer - action_running_mean) / np.sqrt(np.maximum(action_running_variance, 0.01))
 
                             norm_term_buffer = np.array(list(term_buffer))
-                            norm_term_buffer = (norm_term_buffer - term_running_mean) / np.sqrt(term_running_variance + 1e-8)
+                            #norm_term_buffer = (norm_term_buffer - term_running_mean) / np.sqrt(np.maximum(term_running_variance, 0.01))
 
                             # context is computed over the whole buffer, it is replicated BATCH_SIZE times
                             context_values = sess.run(context, feed_dict={"state_plh:0": norm_state_buffer, "terminate_plh:0": norm_term_buffer, "reward_plh:0": norm_reward_buffer, "action_plh:0": norm_action_buffer})
@@ -599,12 +606,12 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                                 if thread_lock and gpu_lock:
                                     with thread_lock:
                                         with gpu_lock:
-                                            sess.run(memory_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": norm_state_mb,
-                                                "terminate_batch_plh:0": norm_term_mb, "reward_batch_plh:0": norm_reward_mb, "action_batch_plh:0": norm_action_mb})
-
                                             sess.run(policy_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": norm_state_mb,
                                                 "terminate_batch_plh:0": norm_term_mb, "reward_batch_plh:0": norm_reward_mb, "action_batch_plh:0": norm_action_mb,
                                                 "alpha_plh:0": ALPHA, "adv_plh:0": adv_mb, "unnorm_action_batch_plh:0": action_mb})
+
+                                            sess.run(memory_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": norm_state_mb,
+                                                "terminate_batch_plh:0": norm_term_mb, "reward_batch_plh:0": norm_reward_mb, "action_batch_plh:0": norm_action_mb})
 
 
                                             sess.run(value_gradients, feed_dict={"q_values_plh:0": q_mb, "state_batch_plh:0": norm_state_mb})
@@ -612,13 +619,12 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                                             sess.run(policy_old_copy)
 
                                 else:
-                                            sess.run(memory_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": norm_state_mb,
-                                                "terminate_batch_plh:0": norm_term_mb, "reward_batch_plh:0": norm_reward_mb, "action_batch_plh:0": norm_action_mb})
-
                                             sess.run(policy_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": norm_state_mb,
                                                 "terminate_batch_plh:0": norm_term_mb, "reward_batch_plh:0": norm_reward_mb, "action_batch_plh:0": norm_action_mb,
                                                 "alpha_plh:0": ALPHA, "adv_plh:0": adv_mb, "unnorm_action_batch_plh:0": action_mb})
 
+                                            sess.run(memory_gradients, feed_dict={"context_plh:0": context_values, "state_batch_plh:0": norm_state_mb,
+                                               "terminate_batch_plh:0": norm_term_mb, "reward_batch_plh:0": norm_reward_mb, "action_batch_plh:0": norm_action_mb})
 
                                             sess.run(value_gradients, feed_dict={"q_values_plh:0": q_mb, "state_batch_plh:0": norm_state_mb})
 
@@ -641,12 +647,12 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                     while done != True:
                         num_states += 1
 
-                        state_running_average = state_running_average +  (s - state_running_average)/num_states if state_running_average.any() else s
-                        sum_states_squared += s ** 2
-                        sum_states += s
+                        #state_running_average = state_running_average +  (s - state_running_average)/num_states if state_running_average.any() else s
+                        #sum_states_squared += s ** 2
+                        #sum_states += s
 
-                        state_running_variance = (1/num_states) * (sum_states_squared - ((sum_states) ** 2) / num_states)
-                        s = (s - state_running_average) / np.sqrt(state_running_variance + 1e-5)
+                        #state_running_variance = (1/num_states) * (sum_states_squared - ((sum_states) ** 2) / num_states)
+                        s = (s - state_running_average) / np.sqrt(np.maximum(state_running_variance, 0.01))
 
                         if thread_lock and gpu_lock:
                             with thread_lock:
@@ -674,7 +680,8 @@ def run_inner_loop(gpu_lock, thread_lock, gym, tf, tid, barrier, loss_params, av
                     average_returns[tid % int(NUM_WORKERS/NUM_PROCS)] = (tid, sum(returns) / TRAJ_SAMPLES)
                     with thread_lock:
                         loss_params[tid % int(NUM_WORKERS/NUM_PROCS)] = None
-                    ALPHA *= ALPHA_DECAY
+                    if epoch % DECAY_ALPHA_INT == 0 and epoch > 0:
+                        ALPHA *= ALPHA_DECAY
     epg_graph = None
     g = None
     loss_es_assign_plhs = None
@@ -800,23 +807,26 @@ def run_outer_loop():
 
                 loss_es_grad_feed_dict = {}
                 average_returns = np.array(average_returns)
-                average_returns = list(relative_ranks(average_returns))
+                average_equal_returns = []
+                num_workers_per_set = int(NUM_WORKERS / V) # guarantee divis
+                for i in range(V):
+                    average_equal_returns.append(sum(average_returns[num_workers_per_set * i: num_workers_per_set*(i+1)])/(num_workers_per_set))
+                average_returns = list(relative_ranks(np.array(average_equal_returns)))
 
                 for param in loss_es_params_values.keys():
                     F = []
-                    num_workers_per_set = int(NUM_WORKERS / V) # guarantee divis
                     for i in range(V):
-                        F.append((sum(average_returns[num_workers_per_set * i: num_workers_per_set*(i+1)])/(num_workers_per_set)) * normal_vectors[i][param])
+                        F.append(average_returns[i] * SIGMA * normal_vectors[i][param])
                     grad = sum(F)/(V)
                     loss_es_grad_feed_dict[loss_es_grad_plhs[param]] = grad
                 sess.run(loss_es_gradients, feed_dict=loss_es_grad_feed_dict)
                 loss_es_params_values = sess.run(loss_es_params_dict)
-
+                #print(loss_es_params_values)
                 print("EPOCH %d " % e)
 
                 with open(ENV + "-epg_loss_params.pkl", "wb") as f:
                     pickle.dump(loss_es_params_values, f, pickle.HIGHEST_PROTOCOL)
-                run_inner_loop(None, None, gym, tf, 0,  None, [loss_es_params_values], None, run_sim=True, num_samples=16, num_epochs=1, alpha=0)
+                run_inner_loop(None, None, gym, tf, 0,  None, [loss_es_params_values], None, run_sim=True, num_samples=16, num_epochs=1, alpha=0.0)
 
                 gc.collect()
             for event in events:
