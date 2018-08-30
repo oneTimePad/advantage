@@ -17,6 +17,13 @@ class LearningAgent(object):
         self._policy = policy
         self._environment = environment
 
+    @property
+    def policy(self):
+        return self._policy
+
+    @property
+    def environment(self):
+        return self._environment
 
     @abstractmethod
     def evaluate_policy(self, state):
@@ -64,6 +71,14 @@ class ActionValueAgent(LearningAgent):
 
         super(ValueAgent, self).__init__(policy, environment)
 
+    @property
+    def value_function(self):
+        return self._value_function
+
+    @property
+    def maximum_function(self):
+        return self._maximum_function
+
     def sample_action(self, conditional_policy):
         """ Action is chosen as the action with maximum action-value
         """
@@ -79,6 +94,10 @@ class PolicyGradientAgent(LearningAgent):
         self._expected_reward = expected_reward # TODO create a special expected reward class
 
         super(PolicyGradientAgent, self).__init__(policy, environment)
+
+    @property
+    def expected_reward(self):
+        return self._expected_reward
 
     @abstractmethod
     def __compute_policy_gradient(self):
@@ -101,6 +120,10 @@ class DiscreteActionSpaceAgent(LearningAgent):
 
         super(DiscreteActionSpaceAgent, self).__init__(policy, environment)
 
+    @property
+    def num_of_actions(self):
+        return self._num_of_actions
+
 class ContinuousActionSpaceAgent(LearningAgent):
     __metaclass__ = ABCMeta
     """ Represents an RL Agent with a continuous action space """
@@ -117,6 +140,18 @@ class ContinuousActionSpaceAgent(LearningAgent):
         self._action_shape = action_space.shape
 
         super(ContinuousActionSpaceAgent, self).__init__(policy, environment)
+
+    @property
+    def action_low(self):
+        return self._action_low
+
+    @property
+    def action_high(self):
+        return self._action_high
+
+    @property
+    def action_shape(self):
+        return self._action_shape
 
     @abstractmethod
     def _continuous_distribution_sample(self, conditional_policy):
