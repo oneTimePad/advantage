@@ -6,7 +6,7 @@ import "protos/approximators/ff_approximators.proto";
 
 message Approximators {
     oneof model {
-        DeepConvolutional deepConvolutional =1 ;
+        DeepConvolutional deepConvolutional = 1 ;
         DeepDense deepDense = 2;
     }
 }
