@@ -1,0 +1,11 @@
+syntax = "proto2";
+
+package Advantage.protos;
+
+import "Advantage/protos/approximators/approximators.proto"
+
+
+message ModelConfiguration{
+
+
+}
