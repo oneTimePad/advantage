@@ -4,7 +4,7 @@ from utils.buffers import ExperienceReplayBuffer, Sarsa
 import numpy as np
 
 class TestExperienceReplayBuffer(unittest.TestCase):
-
+    """ Tests for the various functionalities of the ExperienceReplayBuffer """
     def setUp(self):
         self.BUFFER_SIZE = 2
         self.sarsa_one = Sarsa(np.array([1]),
