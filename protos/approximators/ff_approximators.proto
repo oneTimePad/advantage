@@ -1,0 +1,40 @@
+syntax = "proto2";
+
+package Advantage.protos.approximators;
+
+import "Advantage/protos/approximators.proto";
+
+message DeepConvolutional {
+    repeated ConvolutionalBlock block = 1;
+    required uint32 num_actions = 2;
+    required Output output = 3;
+
+}
+
+message DeepDense {
+    repeated DenseBlock block;
+    required uint32 num_actions;
+}
+
+enum Activation {
+    NONE = 0;
+    RELU = 1;
+    SIGMOID = 2;
+    ELU = 3;
+}
+
+message ConvolutionalBlock {
+    optional string activation = 1 [default = None];
+
+    required uint32 num_filters = 2;
+
+    optional uint32 stride = 3 [default = 1];
+}
+
+message DenseBlock {
+    optional string activation = 1 [default = None];
+    required uint32 num_units = 2;
+    required Output output = 3;
+
+
+}
