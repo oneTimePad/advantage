@@ -1,11 +1,10 @@
 from abc import ABCMeta
 from abc import abstractmethod
+import tensorflow as tf
 
 """ Approximators for Approximate Reinforcement Learning
-    Allows the User to specify their own function approximators.
-
-    In the future, this can be used to define various commonly used
-    Deep Architectures for Deep RL
+    Allows the User to specify their own function approximators or
+    utilize out-of-the-box Architectures configured via protobuf configs.
 """
 
 class DeepApproximator(object):
@@ -13,8 +12,9 @@ class DeepApproximator(object):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self):
-        pass
+    def __init__(self, graph, config):
+        self._config = config
+        self._graph = graph
 
     @abstractmethod
     def set_up(self, tensor_inputs):
@@ -96,3 +96,17 @@ def gaussian_policy(tensor_inputs, num_actions):
     mean = tf.layers.dense(tensor_inputs, num_actions, activation=None)
     sigma = tf.layers.dense(tf.ones([1, num_actions]), activation=None, use_bias=False)
     return mean, sigma
+
+ACTIVATIONS = {
+    "NONE": tf.identity,
+    "RELU" : tf.nn.relu6,
+    "SIGMOID": tf.nn.sigmoid,
+    "ELU": tf.nn.elu
+}
+
+OUTPUTS = {
+    "VALUE": value_function,
+    "MULTINOMIAL": multinomial_policy,
+    "BINOMIAL": binomial_policy,
+    "GAUSSIAN": gaussian_policy
+}
