@@ -1,13 +1,12 @@
-from base_approximators import DeepApproximator
+from .base_approximators import DeepApproximator
 
 """ Feed-forward Deep NN approximators """
 
 class DeepConvolutional(DeepApproximator):
     """ Convolutional Network"""
 
-    def __init__(self, proto_config):
-        pass
-        super(DeepConvolutional, self).__init__(proto_config)
+    def __init__(self):
+        super(DeepConvolutional, self).__init__()
 
     def set_up(self, tensor_inputs):
         pass
@@ -24,9 +23,8 @@ class DeepConvolutional(DeepApproximator):
 class DeepDense(DeepApproximator):
     """ Fully Connected Network"""
 
-    def __init__(self, proto_config):
-        pass
-        super(DeepDense, self).__init__(proto_config)
+    def __init__(self):
+        super(DeepDense, self).__init__()
 
     def set_up(self, tensor_inputs):
         pass

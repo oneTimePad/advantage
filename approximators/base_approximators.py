@@ -1,4 +1,5 @@
 from abc import ABCMeta
+from abc import abstractmethod
 
 """ Approximators for Approximate Reinforcement Learning
     Allows the User to specify their own function approximators.
@@ -12,7 +13,7 @@ class DeepApproximator(object):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, proto_config):
+    def __init__(self):
         pass
 
     @abstractmethod

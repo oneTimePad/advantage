@@ -1,20 +1,12 @@
 syntax = "proto2";
 
-package Advantage.protos.approximators;
+package protos.approximators;
 
+import "protos/approximators/ff_approximators.proto";
 
 message Approximators {
     oneof model {
-        DeepConvolutionalValue deepConvolutionalValue;
-        DeepDenseValue DeepDenseValue;
+        DeepConvolutional deepConvolutional =1 ;
+        DeepDense deepDense = 2;
     }
-}
-
-
-enum Output {
-    VALUE = 0;
-    MULTINOMIAL = 1;
-    BINOMIAL = 2;
-    GAUSSIAN = 3;
-
 }
