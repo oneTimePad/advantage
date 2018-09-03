@@ -19,12 +19,19 @@ message DeepDense {
     required OutputConfig outputConfig = 3;
 }
 
+
+
 message ConvolutionalBlock {
     optional Activation activation = 1 [default = NONE ];
 
     required uint32 num_filters = 2;
 
     optional uint32 stride = 3 [default = 1];
+
+    required uint32 kernelH = 4;
+    required uint32 kernelW = 5;
+
+    optional Padding padding = 6 [default=valid];
 }
 
 message DenseBlock {

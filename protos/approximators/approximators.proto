@@ -9,4 +9,9 @@ message Approximators {
         DeepConvolutional deepConvolutional = 1 ;
         DeepDense deepDense = 2;
     }
+
+    optional bool reuse = 3 [default = false];
+
+    required string name_scope = 4;
+
 }

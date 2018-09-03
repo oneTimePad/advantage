@@ -1,5 +1,6 @@
 from abc import ABCMeta
 from abc import abstractmethod
+from protos.approximators import helpers_pb2
 import tensorflow as tf
 
 """ Approximators for Approximate Reinforcement Learning
@@ -12,9 +13,24 @@ class DeepApproximator(object):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, graph, config):
+    def __init__(self, graph, config, name_scope, reuse=False):
         self._config = config
         self._graph = graph
+        self._name_scope = name_scope
+        self._reuse = reuse
+        self._network = None
+
+    @property
+    def network(self):
+        return self._network
+
+    @staticmethod
+    def enum_activation_to_str(enum_value):
+        return helpers_pb2._ACTIVATION.values_by_number[enum_value].name
+
+    @staticmethod
+    def enum_output_to_str(enum_value):
+        return helpers_pb2._OUTPUT.values_by_number[enum_value].name
 
     @abstractmethod
     def set_up(self, tensor_inputs):
