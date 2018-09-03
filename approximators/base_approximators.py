@@ -19,7 +19,16 @@ class DeepApproximator(object):
         self._name_scope = name_scope
         self._reuse = reuse
         self._network = None
+        self._var_scope_obj = None
+        self._inputs_placeholder = None
 
+    @property
+    def var_scope_obj(self):
+        return self._var_scope_obj
+
+    @property
+    def var_scope_name(self):
+        return self._name_scope
     @property
     def network(self):
         return self._network
@@ -31,6 +40,10 @@ class DeepApproximator(object):
     @staticmethod
     def enum_output_to_str(enum_value):
         return helpers_pb2._OUTPUT.values_by_number[enum_value].name
+
+    @staticmethod
+    def enum_initializer_to_str(enum_value):
+        return helpers_pb2._INITIALIZER.values_by_number[enum_value].name
 
     @abstractmethod
     def set_up(self, tensor_inputs):
@@ -44,9 +57,10 @@ class DeepApproximator(object):
         raise NotImplementedError()
 
     @abstractmethod
-    def inference(self, runtime_tensor_inputs):
+    def inference(self, session, runtime_tensor_inputs):
         """ Performs Runtime inference on the network. Usually setups a Session
                 Args:
+                    session: current runtime session
                     runtime_tensor_inputs: inputs to be passed in at runtime
         """
         raise NotImplementedError()
@@ -98,8 +112,15 @@ def value_function(tensor_inputs, num_actions):
             Returns:
                 regression layer output
     """
-    return tf.layers.dense(tensor_inputs, num_actions)
-
+    shape = tensor_inputs.get_shape()
+    if len(shape) != 4:
+        for _ in range(4 - len(shape)):
+            tensor_inputs = tf.expand_dims(tensor_inputs, axis=1)
+    shape = tensor_inputs.get_shape()
+    kernel_h = int(shape[1])
+    kernel_w = int(shape[2])
+    conv = tf.layers.conv2d(tensor_inputs, filters=num_actions, kernel_size=[kernel_h, kernel_w], activation=None)
+    return tf.squeeze(conv)
 
 def gaussian_policy(tensor_inputs, num_actions):
     """Useful for constructing output layers for continuous stochastic policy
@@ -125,4 +146,9 @@ OUTPUTS = {
     "MULTINOMIAL": multinomial_policy,
     "BINOMIAL": binomial_policy,
     "GAUSSIAN": gaussian_policy
+}
+
+INITIALIZERS = {
+    "ones_initializer": tf.ones_initializer(),
+    "variance_scaling_initializer": tf.variance_scaling_initializer()
 }

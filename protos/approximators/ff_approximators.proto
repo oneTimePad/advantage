@@ -8,15 +8,13 @@ import "protos/approximators/helpers.proto";
 
 message DeepConvolutional {
     repeated ConvolutionalBlock block = 1;
-    required uint32 num_actions = 2;
-    required OutputConfig outputConfig = 3;
+    required OutputConfig outputConfig = 2;
 
 }
 
 message DeepDense {
     repeated DenseBlock block = 1;
-    required uint32 num_actions = 2;
-    required OutputConfig outputConfig = 3;
+    required OutputConfig outputConfig = 2;
 }
 
 
@@ -32,11 +30,14 @@ message ConvolutionalBlock {
     required uint32 kernelW = 5;
 
     optional Padding padding = 6 [default=valid];
+
+    optional Initializer initializer = 7 [default=variance_scaling_initializer];
 }
 
 message DenseBlock {
     optional Activation activation = 1 [default = NONE];
     required uint32 num_units = 2;
+    optional Initializer initializer = 3 [default=variance_scaling_initializer];
 
 
 

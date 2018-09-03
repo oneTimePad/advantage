@@ -16,6 +16,7 @@ class TestApproximatorsBuilder(unittest.TestCase):
         with self.graph.as_default():
             self.inputs_dense = tf.placeholder(shape=[None, 4], name="test_input_dense", dtype=tf.float32)
             self.inputs_conv = tf.placeholder(shape=[None, 32, 32, 1], name="test_input_conv", dtype=tf.float32)
+
     def test_build_DeepConvolutional(self):
 
         approximators_config = parse_approximators_from_file(self.DEEP_CONV_CONFIG)
