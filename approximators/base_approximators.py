@@ -31,6 +31,7 @@ class DeepApproximator(object):
         self._optimizer = OPTIMIZERS[self.enum_optimizer_to_str(config.optimizer)](config.learning_rate)
         self._learning_rate = config.learning_rate
 
+
     @property
     def learning_rate(self):
         return self._learning_rate
@@ -48,7 +49,7 @@ class DeepApproximator(object):
 
     @property
     def trainable_parameters(self): #TODO add support for selecting variables to train
-        return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self._var_scope_obj.name)
+        return self._trainable_variables
 
     @staticmethod
     def enum_activation_to_str(enum_value):
@@ -66,8 +67,24 @@ class DeepApproximator(object):
     def enum_optimizer_to_str(enum_value):
         return helpers_pb2._OPTIMIZER.values_by_number[enum_value].name
 
+    def copy(self, session, runtime_params):
+        """Runs operations to copy runtime values to this models params
+            Args:
+                session: tf.Session object
+                runtime_params: dict with full param names as keys and runtime values as values
+            Raises:
+                ValueError: for wrong args
+        """
+        if not isinstance(session, tf.Session):
+            raise ValueError("Must pass in tf.Session")
+        if not isinstance(runtime_params, dict):
+            raise ValueError("runtime_params must a be dict with param names and values")
 
-    @abstractmethod
+        ops = [v[1] for v in self._copy_ops_dict.values()]
+        feed_dict = { v[0]: runtime_params[k] for k,v in self._copy_ops_dict.items() }
+        with session.as_default():
+            session.run(ops, feed_dict=feed_dict)
+
     def set_up(self, tensor_inputs):
         """ TensorFlow construction of the approximator network
                 Args:
@@ -75,8 +92,20 @@ class DeepApproximator(object):
 
                 Returns:
                     output tensor of the network
+
+                Raises:
+                    NotImplementedError: if method is not overriden
         """
-        raise NotImplementedError()
+        if self._var_scope_obj is None:
+            raise NotImplementedError()
+        with self._graph.as_default():
+            # setup operations to copy parameters from runtime values
+            self._trainable_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self._var_scope_obj.name)
+            self._copy_ops_dict = {}
+            for param in self._trainable_variables:
+                param_value_plh = tf.placeholder(shape=param.get_shape(), dtype=tf.float32)
+                assign_op = tf.assign(param, param_value_plh)
+                self._copy_ops_dict[param.name] = (param_value_plh, assign_op)
 
     @abstractmethod
     def inference(self, session, runtime_tensor_inputs):

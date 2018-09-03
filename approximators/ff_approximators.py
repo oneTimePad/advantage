@@ -18,7 +18,7 @@ class DeepConvolutional(DeepApproximator):
         blocks = self._config.block
         prev = tensor_inputs
         with self._graph.as_default():
-            with tf.variable_scope(self._scope + self._name_scope, reuse=self._reuse) as scope:
+            with tf.variable_scope(self._scope + "_" + self._name_scope, reuse=self._reuse) as scope:
                 for block in blocks:
                     activation_name = self.enum_activation_to_str(block.activation)
                     initializer_name = self.enum_initializer_to_str(block.initializer)
@@ -36,6 +36,7 @@ class DeepConvolutional(DeepApproximator):
         self._inputs_placeholder = tensor_inputs
         self._var_scope_obj = scope
         self._network = output
+        super(DeepConvolutional, self).set_up(tensor_inputs)
 
     def inference(self, session, runtime_tensor_inputs):
         if not isinstance(session, tf.Session):
@@ -61,7 +62,7 @@ class DeepDense(DeepApproximator):
         blocks = self._config.block
         prev = tensor_inputs
         with self._graph.as_default():
-            with tf.variable_scope(self._scope + self._name_scope, reuse=self._reuse) as scope:
+            with tf.variable_scope(self._scope + "_" + self._name_scope, reuse=self._reuse) as scope:
                 for block in blocks:
                     activation_name = self.enum_activation_to_str(block.activation)
                     initializer_name = self.enum_initializer_to_str(block.initializer)
@@ -74,6 +75,7 @@ class DeepDense(DeepApproximator):
         self._inputs_placeholder = tensor_inputs
         self._var_scope_obj = scope
         self._network = output
+        super(DeepDense, self).set_up(tensor_inputs)
 
 
     def inference(self, session, runtime_tensor_inputs):

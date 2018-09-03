@@ -11,8 +11,6 @@ class MockDeepDenseBlock:
         self.num_units = num_units
         self.initializer = 1
 
-
-
 class MockOutput:
     def __init__(self, output):
         self.output = output
@@ -51,11 +49,29 @@ class TestDeepDense(unittest.TestCase):
             self.init = tf.global_variables_initializer()
 
     def test_inference(self):
-        with self.session.as_default():
-            self.session.run(self.init)
-            output = self.network.inference(self.session, self.test_inputs)
+        with self.graph.as_default():
+            with self.session.as_default():
+                self.session.run(self.init)
+                output = self.network.inference(self.session, self.test_inputs)
 
-        self.assertEqual(output.shape[0], 2)
-        self.assertEqual(output.shape[1], 2)
+            self.assertEqual(output.shape[0], 2)
+            self.assertEqual(output.shape[1], 2)
+
+    def test_copy(self):
+        with self.graph.as_default():
+            with self.session.as_default():
+                params = self.network.trainable_parameters
+                params_dict = {}
+                new_params_dict = {}
+                for param in params:
+                    shape = [int(s) for s in param.get_shape()]
+                    new_param = np.ones(shape=shape, dtype=np.float32)
+                    new_params_dict[param.name] = new_param
+                    params_dict[param.name] = new_param
+
+                self.network.copy(self.session, params_dict)
+
+                for p in params:
+                    np.testing.assert_array_equal(self.session.run(p), new_params_dict[p.name])
 
 unittest.main()
