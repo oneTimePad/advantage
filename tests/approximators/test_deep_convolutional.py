@@ -30,6 +30,8 @@ class MockDeepConvolutionalConfig:
     def __init__(self, output, blocks):
         self.block = blocks
         self.outputConfig = output
+        self.optimizer = 0
+        self.learning_rate = .001
 
 class TestDeepConvolutional(unittest.TestCase):
     """Tests for DeepConvolutional approximator"""

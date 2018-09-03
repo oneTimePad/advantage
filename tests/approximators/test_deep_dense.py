@@ -1,5 +1,4 @@
 import unittest
-import os
 from approximators.ff_approximators import DeepDense
 import tensorflow as tf
 import numpy as np
@@ -11,6 +10,7 @@ class MockDeepDenseBlock:
         self.activation = activation
         self.num_units = num_units
         self.initializer = 1
+
 
 
 class MockOutput:
@@ -25,6 +25,8 @@ class MockDeepDenseConfig:
     def __init__(self, output, blocks):
         self.block = blocks
         self.outputConfig = output
+        self.optimizer = 0
+        self.learning_rate = .001
 
 class TestDeepDense(unittest.TestCase):
     """Tests for DeepDense approximator"""

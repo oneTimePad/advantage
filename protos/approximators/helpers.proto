@@ -38,3 +38,8 @@ enum Initializer {
     ones_initializer = 0;
     variance_scaling_initializer = 1;
 }
+
+enum Optimizer {
+    AdamOptimizer = 0;
+    GradientDescentOptimizer = 1;
+}

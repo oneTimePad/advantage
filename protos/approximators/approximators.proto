@@ -3,6 +3,7 @@ syntax = "proto2";
 package protos.approximators;
 
 import "protos/approximators/ff_approximators.proto";
+import "protos/approximators/helpers.proto";
 
 message Approximators {
     oneof model {
@@ -13,5 +14,9 @@ message Approximators {
     optional bool reuse = 3 [default = false];
 
     required string name_scope = 4;
+
+    optional Optimizer optimizer = 5;
+
+    optional float learning_rate = 6;
 
 }

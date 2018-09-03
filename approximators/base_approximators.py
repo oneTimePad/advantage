@@ -8,6 +8,12 @@ import tensorflow as tf
     utilize out-of-the-box Architectures configured via protobuf configs.
 """
 
+OPTIMIZERS = {
+    "AdamOptimizer": tf.train.AdamOptimizer,
+    "GradientDescentOptimizer": tf.train.GradientDescentOptimizer
+}
+
+
 class DeepApproximator(object):
     """ Interface for deep approximators for value, policies, meta-losses, etc...
     """
@@ -22,6 +28,13 @@ class DeepApproximator(object):
         self._var_scope_obj = None
         self._inputs_placeholder = None
 
+        self._optimizer = OPTIMIZERS[self.enum_optimizer_to_str(config.optimizer)](config.learning_rate)
+        self._learning_rate = config.learning_rate
+
+    @property
+    def learning_rate(self):
+        return self._learning_rate
+
     @property
     def var_scope_obj(self):
         return self._var_scope_obj
@@ -32,6 +45,10 @@ class DeepApproximator(object):
     @property
     def network(self):
         return self._network
+
+    @property
+    def trainable_parameters(self): #TODO add support for selecting variables to train
+        return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self._var_scope_obj.name)
 
     @staticmethod
     def enum_activation_to_str(enum_value):
@@ -44,6 +61,11 @@ class DeepApproximator(object):
     @staticmethod
     def enum_initializer_to_str(enum_value):
         return helpers_pb2._INITIALIZER.values_by_number[enum_value].name
+
+    @staticmethod
+    def enum_optimizer_to_str(enum_value):
+        return helpers_pb2._OPTIMIZER.values_by_number[enum_value].name
+
 
     @abstractmethod
     def set_up(self, tensor_inputs):
@@ -73,6 +95,7 @@ class DeepApproximator(object):
                 gradients tensor
         """
         raise NotImplementedError()
+
 
     @abstractmethod
     def update(self, runtime_inputs):

@@ -39,6 +39,4 @@ message DenseBlock {
     required uint32 num_units = 2;
     optional Initializer initializer = 3 [default=variance_scaling_initializer];
 
-
-
 }
