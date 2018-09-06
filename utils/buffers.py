@@ -11,12 +11,14 @@ class ExperienceReplayBuffer(object):
     allow for I.I.D data to traing non-linear approximators (i.e. NN)
     """
 
-    def __init__(self, buffer_size, add_padding=False):
+    def __init__(self, buffer_size, add_padding=False, normazing=False):
         """
             Args:
                 buffer_size: size of deque
                 add_padding: whether to fill deque up with padded values
         """
+        self._normalizing = normalizing # TODO add normalizing feature
+
         self._buffer_size =  buffer_size
 
         self._cur_buffer_size = 0
