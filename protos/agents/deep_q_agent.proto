@@ -1,0 +1,13 @@
+syntax = "proto2";
+
+package protos.deep_q_agent;
+
+
+import "protos/approximators/approximators.proto";
+
+message DeepQAgent {
+
+    required Approximators tgt_network = 1;
+    required Approximators policy = 2;
+
+}
