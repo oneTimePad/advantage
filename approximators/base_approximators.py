@@ -30,11 +30,17 @@ class DeepApproximator(object):
 
         self._optimizer = OPTIMIZERS[self.enum_optimizer_to_str(config.optimizer)](config.learning_rate)
         self._learning_rate = config.learning_rate
+        self._loss = None
+        self._applied_gradients = None
 
 
     @property
     def learning_rate(self):
         return self._learning_rate
+
+    @property
+    def applied_gradients(self):
+        return self._applied_gradients
 
     @property
     def var_scope_obj(self):
@@ -107,6 +113,19 @@ class DeepApproximator(object):
                 assign_op = tf.assign(param, param_value_plh)
                 self._copy_ops_dict[param.name] = (param_value_plh, assign_op)
 
+    def initialize(self, session):
+        """ Initialize all network variables
+                Args:
+                    session: tf.Session
+
+                Raises:
+                    ValueError: for not tf.Session
+        """
+        if not isinstance(session, tf.Session): #TODO add a test for this
+            raise ValueError("Must pass in tf.Session")
+        with session.as_default():
+            session.run(tf.initialize_variables(self.trainable_parameters))
+
     @abstractmethod
     def inference(self, session, runtime_tensor_inputs):
         """ Performs Runtime inference on the network. Usually setups a Session
@@ -116,23 +135,33 @@ class DeepApproximator(object):
         """
         raise NotImplementedError()
 
-    @abstractmethod
-    def gradients(self):
+
+    def gradients(self, loss):
         """ Compute the network gradients for parameter update
 
             Returns:
                 gradients tensor
         """
-        raise NotImplementedError()
+        self._loss = loss
+        return self._optimizer.compute_gradients(loss, self.trainable_parameters)
+
+    def apply_gradients(self, gradients):
+        """ Applied gradients to network optimizer and creates train operation
+                Args:
+                    gradients in proper tensorflow format
+        """
+        self._applied_gradients
+        self._train_op = self._optimizer.apply_gradients(gradients)
 
 
-    @abstractmethod
-    def update(self, runtime_inputs):
+    def update(self, session, runtime_inputs):
         """ Perform a network parameter update
                 Args:
-                    runtime_inputs: usually training batch inputs
+                    runtime_inputs: usually training batch inputs containg placeholders and values
         """
-        raise NotImplementedError()
+        with session.as_default():
+            session.run(self._train_op, feed_dict=runtime_inputs)
+
 
 
 def multinomial_policy(tensor_inputs, axis):

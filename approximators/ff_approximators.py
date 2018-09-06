@@ -44,11 +44,6 @@ class DeepConvolutional(DeepApproximator):
         with session.as_default():
             return session.run(self._network, feed_dict={self._inputs_placeholder: runtime_tensor_inputs}) #TODO as of now this is duplicate code, might change later
 
-    def gradients(self):
-        pass
-
-    def update(self, runtime_inputs):
-        pass
 
 class DeepDense(DeepApproximator):
     """ Fully Connected Network"""
@@ -83,9 +78,3 @@ class DeepDense(DeepApproximator):
             raise ValueError("Must pass in tf.Session")
         with session.as_default():
             return session.run(self._network, feed_dict={self._inputs_placeholder: runtime_tensor_inputs})
-
-    def gradients(self):
-        pass
-
-    def update(self, runtime_inputs):
-        pass
