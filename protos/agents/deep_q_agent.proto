@@ -1,6 +1,6 @@
 syntax = "proto2";
 
-package protos.deep_q_agent;
+package protos;
 
 
 import "protos/approximators/approximators.proto";

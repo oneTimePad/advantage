@@ -1,9 +1,20 @@
 syntax = "proto2";
 
-package protos.approximators;
+package protos;
 
 import "protos/approximators/ff_approximators.proto";
 import "protos/approximators/helpers.proto";
+
+enum Shape {
+    TwoD = 1;
+    ThreeD = 2;
+    FourD = 3;
+}
+
+message Input {
+    required Shape shape = 1;
+
+}
 
 message Approximators {
     oneof model {

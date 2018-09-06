@@ -1,6 +1,6 @@
 syntax = "proto2";
 
-package Advantage.protos;
+package protos;
 
 import "protos/agents/deep_q_agent.proto";
 
@@ -8,4 +8,5 @@ message Agents {
     oneof agent {
         DeepQAgent deepQAgent = 1;
     }
+
 }
