@@ -1,5 +1,6 @@
 from abc import ABCMeta
 from abc import abstractmethod
+from utils.buffers import Sarsa
 
 
 class LearningAgent(object):
@@ -16,6 +17,18 @@ class LearningAgent(object):
     def __init__(self, policy, environment):
         self._policy = policy
         self._environment = environment
+        self._done = True
+        self._state = None
+        self._steps = 0 # total number of steps gone
+        self._total_reward = 0
+
+    @property
+    def total_reward(self):
+        return self._total_reward
+
+    @property
+    def steps(self):
+        return self._steps
 
     @property
     def policy(self):
@@ -24,6 +37,11 @@ class LearningAgent(object):
     @property
     def environment(self):
         return self._environment
+
+    @abstractmethod
+    def set_up(self):
+        """Performs setup operations for the Agents"""
+        raise NotImplementedError()
 
     @abstractmethod
     def evaluate_policy(self, state):
@@ -41,21 +59,66 @@ class LearningAgent(object):
         raise NotImplementedError()
 
     @abstractmethod
-    def sample_action(self, conditional_policy):
+    def sample_action(self, conditional_policy, training):
         """ Samples an action from the policy distribution given the action-space.
 
             Args:
                 conditional_policy -> policy conditioned on a state
+                training -> whether agent is training
             Returns:
                 action -> an action within the action-space.
         """
+        raise NotImplementedError()
+
 
     @abstractmethod
-    def improve_policy(self):
+    def improve_policy(self, sarsa_samples):
         """ Improves the current policy based on Information
         observed from evaluation.
+            Args:
+                sarsa_samples: samples to improve using
         """
         raise NotImplementedError()
+
+    def act_in_env(self, training):
+        """ Agent acts in the environment
+            Args:
+                training: whether the agent is training
+
+            Return:
+                sarsa element
+        """
+        if self._done:
+            s = self._environment.reset()
+        conditional_policy self.evaluate_policy(s)
+        a = self.sample_action(conditional_policy, trainig)
+        self._state, reward, self._done, _ = self._environment.step(a)
+        self._steps += 1
+        self._reward += reward
+        return Sarsa(state=s, action=a,
+                    reward=reward, done=self._done,
+                    next_state=self._state, next_action=None)
+
+    def act_for_steps(self, num_steps, training):
+        """ Agent acts in environment for num_steps
+                Args:
+                    num_steps: maximum number of steps to act for
+                    training: whether the agent is training
+
+                Returns: step number, return value of act_in_env
+
+                Raises:
+                    StopIteration: after num_steps
+        """
+        for step in range(1, num_steps):
+            yield step, self.act_in_env(training)
+
+        raise StopIteration("Max number of steps exceeded")
+
+
+
+
+
 
 
 class ActionValueAgent(LearningAgent):
@@ -65,11 +128,11 @@ class ActionValueAgent(LearningAgent):
     samples from the environment and boostrapping. The Action-Value is used for control.
     """
 
-    def __init__(self, policy, environment, value_function, maximum_function):
+    def __init__(self, value_function, environment,  maximum_function):
         self._value_function = value_function
         self._maximum_function = maximum_function
 
-        super(ValueAgent, self).__init__(policy, environment)
+        super(ActionValueAgent, self).__init__(self._value_function, environment)
 
     @property
     def value_function(self):
@@ -79,10 +142,10 @@ class ActionValueAgent(LearningAgent):
     def maximum_function(self):
         return self._maximum_function
 
-    def sample_action(self, conditional_policy):
+    def sample_action(self, conditional_policy, training):
         """ Action is chosen as the action with maximum action-value
         """
-        return self._maximum_function(policy)
+        return self._maximum_function(conditional_policy)
 
 class PolicyGradientAgent(LearningAgent):
     __metaclass__ = ABCMeta
