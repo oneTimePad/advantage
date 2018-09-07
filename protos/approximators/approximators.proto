@@ -4,6 +4,7 @@ package protos;
 
 import "protos/approximators/ff_approximators.proto";
 import "protos/approximators/helpers.proto";
+import "protos/approximators/outputs.proto";
 
 enum Shape {
     TwoD = 1;
@@ -30,4 +31,10 @@ message Approximators {
 
     optional float learning_rate = 6;
 
+    oneof output {
+        Value value = 7;
+        Multinomial multinomial = 8;
+        Binomial binomial = 9;
+        Gaussian gaussian = 10;
+    }
 }

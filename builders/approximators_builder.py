@@ -21,6 +21,6 @@ def build(graph, approximators_config, inputs):
     except AttributeError:
         raise ValueError("Model %s in configuration does not exist" % model)
 
-    model = model_class(graph, getattr(approximators_config, approximators_config.WhichOneof("model")),  approximators_config.name_scope, approximators_config.reuse)
+    model = model_class(graph, approximators_config)#getattr(approximators_config, approximators_config.WhichOneof("model")),  approximators_config.name_scope, approximators_config.reuse)
     model.set_up(inputs)
     return model

@@ -18,6 +18,7 @@ class MockDeepConvolutionalBlock:
             self.padding = 1
 
 
+
 class MockOutput:
     def __init__(self, output):
         self.output = output
@@ -26,19 +27,38 @@ class MockOutput:
     def WhichOneof(self, string):
         return "num_actions"
 
+class Field:
+    def __init__(self):
+        self.name = "num_actions"
+
+class ValueOutput:
+    def ListFields(self):
+        yield (Field(), 2)
+
+class Model:
+    def __init__(self, block):
+        self.block = block
+
 class MockDeepConvolutionalConfig:
-    def __init__(self, output, blocks):
-        self.block = blocks
-        self.outputConfig = output
+    def __init__(self, blocks):
+        self.model = Model(blocks)
+        self.value = ValueOutput()
         self.optimizer = 0
         self.learning_rate = .001
+        self.name_scope = "test"
+        self.reuse = False
+
+    def WhichOneof(self, string):
+        if string == "output":
+            return "value"
+        else:
+            return "model"
 
 class TestDeepConvolutional(unittest.TestCase):
     """Tests for DeepConvolutional approximator"""
 
     def setUp(self):
         self.deepConvConfig = MockDeepConvolutionalConfig(
-                                    MockOutput(0),
                                     [MockDeepConvolutionalBlock(2, 3, 3, 0, 1)])
         self.graph = tf.Graph()
         with self.graph.as_default():
@@ -53,7 +73,7 @@ class TestDeepConvolutional(unittest.TestCase):
         self.test_inputs = self.test_inputs.transpose([0, 2, 3, 1])
 
         self.session = tf.Session(graph = self.graph)
-        self.network = DeepConvolutional(self.graph, self.deepConvConfig, "test")
+        self.network = DeepConvolutional(self.graph, self.deepConvConfig)
         self.network.set_up(self.inputs_conv)
 
         with self.graph.as_default():

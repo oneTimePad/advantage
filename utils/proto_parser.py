@@ -26,3 +26,24 @@ def parse_configs_from_file(config_file):
             dictionary of protobuf objects
     """
     pass
+
+
+def proto_to_dict(proto_obj):
+    """Converts Protobuf Python objs to dictionaries
+        Args:
+            proto_obj: *_pb2 protbuf python obj
+
+        Returns:
+            dict of string field names and values
+
+        Raises:
+            ValueError: for not a _pb2 protobuf python obj
+    """
+    if not hasattr(proto_obj, "ListFields"):
+        raise ValueError("Requires instance of _pb2 python protobuf obj")
+
+    proto_dict = {}
+    for field, value in proto_obj.ListFields():
+        proto_dict[field.name] = value
+
+    return proto_dict

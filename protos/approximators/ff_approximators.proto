@@ -8,13 +8,10 @@ import "protos/approximators/helpers.proto";
 
 message DeepConvolutional {
     repeated ConvolutionalBlock block = 1;
-    required OutputConfig outputConfig = 2;
-
 }
 
 message DeepDense {
     repeated DenseBlock block = 1;
-    required OutputConfig outputConfig = 2;
 }
 
 

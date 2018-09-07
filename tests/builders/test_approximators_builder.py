@@ -10,8 +10,8 @@ __location__ = os.path.realpath(
 class TestApproximatorsBuilder(unittest.TestCase):
     """ Tests for basic construction of deep models. """ #TODO add more as configuration becomes more complex
     def setUp(self):
-        self.DEEP_CONV_CONFIG = os.path.join(__location__,  "mock_deep_convolutional.config")
-        self.DEEP_DENSE_CONFIG = os.path.join(__location__, "mock_deep_dense.config")
+        self.DEEP_CONV_CONFIG = os.path.join(__location__,  "../mock_configs/mock_deep_convolutional.config")
+        self.DEEP_DENSE_CONFIG = os.path.join(__location__, "../mock_configs/mock_deep_dense.config")
         self.graph = tf.Graph()
         with self.graph.as_default():
             self.inputs_dense = tf.placeholder(shape=[None, 4], name="test_input_dense", dtype=tf.float32)

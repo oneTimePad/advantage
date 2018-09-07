@@ -11,27 +11,40 @@ class MockDeepDenseBlock:
         self.num_units = num_units
         self.initializer = 1
 
-class MockOutput:
-    def __init__(self, output):
-        self.output = output
-        self.num_actions = 2
 
-    def WhichOneof(self, string):
-        return "num_actions"
+class Field:
+    def __init__(self):
+        self.name = "num_actions"
+
+class ValueOutput:
+
+    def ListFields(self):
+        yield (Field(), 2)
+
+class Model:
+    def __init__(self, block):
+        self.block = block
 
 class MockDeepDenseConfig:
     def __init__(self, output, blocks):
-        self.block = blocks
-        self.outputConfig = output
+        self.model = Model(blocks_
+        self.value = ValueOutput()
         self.optimizer = 0
         self.learning_rate = .001
+        self.name_scope = "test"
+        self.reuse = False
+
+    def WhichOneof(self, string):
+        if string == "output":
+            return "value"
+        else:
+            return "model"
 
 class TestDeepDense(unittest.TestCase):
     """Tests for DeepDense approximator"""
 
     def setUp(self):
         self.deepDenseConfig = MockDeepDenseConfig(
-                                    MockOutput(0),
                                     [MockDeepDenseBlock(0, 4),
                                     MockDeepDenseBlock(0, 4)])
         self.graph = tf.Graph()
@@ -42,11 +55,15 @@ class TestDeepDense(unittest.TestCase):
                                      [1.0, 2.0, 3.0, 4.0]], dtype=np.float32)
 
         self.session = tf.Session(graph = self.graph)
-        self.network = DeepDense(self.graph, self.deepDenseConfig, "test")
+        self.network = DeepDense(self.graph, self.deepDenseConfig)
         self.network.set_up(self.inputs_dense)
 
         with self.graph.as_default():
             self.init = tf.global_variables_initializer()
+
+    def test_initialize(self):
+        # TODO
+        pass
 
     def test_inference(self):
         with self.graph.as_default():

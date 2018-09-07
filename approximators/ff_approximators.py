@@ -1,4 +1,4 @@
-from .base_approximators import DeepApproximator, ACTIVATIONS, OUTPUTS, INITIALIZERS
+from .base_approximators import DeepApproximator, ACTIVATIONS, INITIALIZERS
 from protos.approximators import helpers_pb2
 import tensorflow as tf
 """ Feed-forward Deep NN approximators """
@@ -6,16 +6,17 @@ import tensorflow as tf
 class DeepConvolutional(DeepApproximator):
     """ Convolutional Network"""
 
-    def __init__(self, graph, config, name_scope, reuse=False):
+    def __init__(self, graph, config):
         self._scope = "DeepConvolutional"
-        super(DeepConvolutional, self).__init__(graph, config, name_scope, reuse=reuse)
+        self._model = self.parse_specific_model_config(config)
+        super(DeepConvolutional, self).__init__(graph, config)
 
     @staticmethod
     def enum_padding_to_str(enum_value):
         return helpers_pb2._PADDING.values_by_number[enum_value].name
 
     def set_up(self, tensor_inputs):
-        blocks = self._config.block
+        blocks = self._model.block
         prev = tensor_inputs
         with self._graph.as_default():
             with tf.variable_scope(self._scope + "_" + self._name_scope, reuse=self._reuse) as scope:
@@ -29,9 +30,8 @@ class DeepConvolutional(DeepApproximator):
                                                     padding=self.enum_padding_to_str(block.padding),
                                                     kernel_initializer=INITIALIZERS[initializer_name])
 
-                output_config = self._config.outputConfig
-                output_name = self.enum_output_to_str(output_config.output)
-                output = OUTPUTS[output_name](prev, getattr(output_config, output_config.WhichOneof("number")))
+
+                output = self._output_fn(prev)
 
         self._inputs_placeholder = tensor_inputs
         self._var_scope_obj = scope
@@ -48,13 +48,13 @@ class DeepConvolutional(DeepApproximator):
 class DeepDense(DeepApproximator):
     """ Fully Connected Network"""
 
-    def __init__(self, graph, config, name_scope, reuse=False):
+    def __init__(self, graph, config):
         self._scope = "DeepDense"
-        self._var_scope_obj = None
-        super(DeepDense, self).__init__(graph, config, name_scope, reuse)
+        self._model = self.parse_specific_model_config(config)
+        super(DeepDense, self).__init__(graph, config)
 
     def set_up(self, tensor_inputs):
-        blocks = self._config.block
+        blocks = self._model.block
         prev = tensor_inputs
         with self._graph.as_default():
             with tf.variable_scope(self._scope + "_" + self._name_scope, reuse=self._reuse) as scope:
@@ -63,9 +63,7 @@ class DeepDense(DeepApproximator):
                     initializer_name = self.enum_initializer_to_str(block.initializer)
                     prev = tf.layers.dense(prev, block.num_units, activation=ACTIVATIONS[activation_name],
                                                                     kernel_initializer=INITIALIZERS[initializer_name])
-                output_config = self._config.outputConfig
-                output_name = self.enum_output_to_str(output_config.output)
-                output = OUTPUTS[output_name](prev, getattr(output_config, output_config.WhichOneof("number")))
+                output = self._output_fn(prev)
 
         self._inputs_placeholder = tensor_inputs
         self._var_scope_obj = scope
