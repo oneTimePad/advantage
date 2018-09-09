@@ -1,21 +1,21 @@
 from google.protobuf import text_format
 import tensorflow as tf
 
-def parse_approximators_from_file(approximators_config_file):
-    from protos.approximators import approximators_pb2
-    """ For testing: Reads from configuration file the approximators configuration
+
+
+def parse_obj_from_file(config_file, proto_buf_cls):
+    """ For testing: Reads from configuration file the specific object configuration
         Args:
             approximators_config_file: string path to approx file
         Returns:
             approximators protobuf object
     """
-    approximators_config = approximators_pb2.Approximators()
-    with tf.gfile.GFile(approximators_config_file, "r") as f:
+    obj_config = proto_buf_cls()
+    with tf.gfile.GFile(config_file, "r") as f:
         proto_str = f.read()
-        text_format.Merge(proto_str, approximators_config)
+        text_format.Merge(proto_str, obj_config)
 
-    return approximators_config
-
+    return obj_config
 
 
 def parse_configs_from_file(config_file):

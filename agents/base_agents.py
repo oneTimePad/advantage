@@ -1,3 +1,4 @@
+import gym
 from abc import ABCMeta
 from abc import abstractmethod
 from utils.buffers import Sarsa
@@ -14,13 +15,14 @@ class LearningAgent(object):
     formulation.
     """
 
-    def __init__(self, policy, environment):
+    def __init__(self, policy, environment, **kwargs):
         self._policy = policy
         self._environment = environment
         self._done = True
         self._state = None
         self._steps = 0 # total number of steps gone
         self._total_reward = 0
+
 
     @property
     def total_reward(self):
@@ -90,7 +92,7 @@ class LearningAgent(object):
         """
         if self._done:
             s = self._environment.reset()
-        conditional_policy self.evaluate_policy(s)
+        conditional_policy = self.evaluate_policy(s)
         a = self.sample_action(conditional_policy, trainig)
         self._state, reward, self._done, _ = self._environment.step(a)
         self._steps += 1
@@ -117,10 +119,6 @@ class LearningAgent(object):
 
 
 
-
-
-
-
 class ActionValueAgent(LearningAgent):
     __metaclass__ = ABCMeta
     """ Represents an RL Agent that is Value-function based using Sample-based RL.
@@ -128,15 +126,10 @@ class ActionValueAgent(LearningAgent):
     samples from the environment and boostrapping. The Action-Value is used for control.
     """
 
-    def __init__(self, value_function, environment,  maximum_function):
-        self._value_function = value_function
+    def __init__(self, policy, environment,  maximum_function, **kwargs):
         self._maximum_function = maximum_function
 
-        super(ActionValueAgent, self).__init__(self._value_function, environment)
-
-    @property
-    def value_function(self):
-        return self._value_function
+        super(ActionValueAgent, self).__init__(policy=policy, environment=environment, **kwargs)
 
     @property
     def maximum_function(self):
@@ -153,10 +146,10 @@ class PolicyGradientAgent(LearningAgent):
     gradient of the expected reward function and uses it to directly update the policy
     """
 
-    def __init__(self, policy, environment, expected_reward):
+    def __init__(self, policy, environment, expected_reward, **kwargs):
         self._expected_reward = expected_reward # TODO create a special expected reward class
 
-        super(PolicyGradientAgent, self).__init__(policy, environment)
+        super(PolicyGradientAgent, self).__init__(policy=policy, environment=environment, **kwargs)
 
     @property
     def expected_reward(self):
@@ -172,16 +165,16 @@ class DiscreteActionSpaceAgent(LearningAgent):
     """ Represents an RL Agent with a discrete agent space """
 
 
-    def __init__(self, policy, environment):
+    def __init__(self, policy, environment, **kwargs):
 
         action_space = environment.action_space
 
-        if not isinstance(action_space, gym.Discrete):
+        if not isinstance(action_space, gym.spaces.Discrete):
             raise Exception() # TODO: replace with specific exception
 
         self._num_of_actions = action_space.n
 
-        super(DiscreteActionSpaceAgent, self).__init__(policy, environment)
+        super(DiscreteActionSpaceAgent, self).__init__(policy=policy, environment=environment, **kwargs)
 
     @property
     def num_of_actions(self):
@@ -191,18 +184,18 @@ class ContinuousActionSpaceAgent(LearningAgent):
     __metaclass__ = ABCMeta
     """ Represents an RL Agent with a continuous action space """
 
-    def __init__(self, policy, environment):
+    def __init__(self, policy, environment, **kwargs):
 
         action_space = self._environment.action
 
-        if not isinstance(action_space, gym.Box):
+        if not isinstance(action_space, gym.spaces.Box):
             raise Exception() # TODO: replace with specific exception
 
         self._action_low = action_space.low
         self._action_high = action_space.high
         self._action_shape = action_space.shape
 
-        super(ContinuousActionSpaceAgent, self).__init__(policy, environment)
+        super(ContinuousActionSpaceAgent, self).__init__(policy=policy, environment=environment, **kwargs)
 
     @property
     def action_low(self):

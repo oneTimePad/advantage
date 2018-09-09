@@ -1,8 +1,9 @@
 import unittest
 import os
 from builders.approximators_builder import build
-from utils.proto_parser import parse_approximators_from_file
+from utils.proto_parser import parse_obj_from_file
 from approximators.ff_approximators import DeepConvolutional, DeepDense
+from protos.approximators import approximators_pb2
 import tensorflow as tf
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__)))
@@ -19,7 +20,7 @@ class TestApproximatorsBuilder(unittest.TestCase):
 
     def test_build_DeepConvolutional(self):
 
-        approximators_config = parse_approximators_from_file(self.DEEP_CONV_CONFIG)
+        approximators_config = parse_obj_from_file(self.DEEP_CONV_CONFIG, approximators_pb2.Approximators)
 
         deepConv = build(self.graph, approximators_config, self.inputs_conv)
 
