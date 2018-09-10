@@ -26,8 +26,8 @@ class Model:
         self.block = block
 
 class MockDeepDenseConfig:
-    def __init__(self, output, blocks):
-        self.model = Model(blocks_
+    def __init__(self, blocks):
+        self.model = Model(blocks)
         self.value = ValueOutput()
         self.optimizer = 0
         self.learning_rate = .001

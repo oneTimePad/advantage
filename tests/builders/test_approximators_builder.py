@@ -35,7 +35,7 @@ class TestApproximatorsBuilder(unittest.TestCase):
 
     def test_build_DeepDense(self):
 
-        approximators_config = parse_approximators_from_file(self.DEEP_DENSE_CONFIG)
+        approximators_config = parse_obj_from_file(self.DEEP_DENSE_CONFIG, approximators_pb2.Approximators)
 
         deepDense = build(self.graph, approximators_config, self.inputs_dense)
 
