@@ -1,9 +1,10 @@
 import unittest
+import os
 from approximators.ff_approximators import DeepConvolutional
 import tensorflow as tf
 import numpy as np
 
-
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 class MockDeepConvolutionalBlock:
     def __init__(self, num_filters,
                        kernelH, kernelW,
@@ -74,7 +75,7 @@ class TestDeepConvolutional(unittest.TestCase):
 
         self.session = tf.Session(graph = self.graph)
         self.network = DeepConvolutional(self.graph, self.deepConvConfig)
-        self.network.set_up(self.inputs_conv)
+        self.network.set_up(self.inputs_conv, [self.inputs_conv])
 
         with self.graph.as_default():
             self.init = tf.global_variables_initializer()
@@ -82,7 +83,7 @@ class TestDeepConvolutional(unittest.TestCase):
     def test_inference(self):
         with self.session.as_default():
             self.session.run(self.init)
-            output = self.network.inference(self.session, self.test_inputs)
+            output = self.network.inference(self.session, {"test_input_conv": self.test_inputs})
 
         self.assertEqual(output.shape[0], 2)
         self.assertEqual(output.shape[0], 2)

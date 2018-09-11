@@ -1,8 +1,9 @@
 import unittest
+import os
 from approximators.ff_approximators import DeepDense
 import tensorflow as tf
 import numpy as np
-
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 class MockDeepDenseBlock:
     def __init__(self,
                  activation,
@@ -56,7 +57,7 @@ class TestDeepDense(unittest.TestCase):
 
         self.session = tf.Session(graph = self.graph)
         self.network = DeepDense(self.graph, self.deepDenseConfig)
-        self.network.set_up(self.inputs_dense)
+        self.network.set_up(self.inputs_dense, [self.inputs_dense])
 
         with self.graph.as_default():
             self.init = tf.global_variables_initializer()
@@ -69,7 +70,7 @@ class TestDeepDense(unittest.TestCase):
         with self.graph.as_default():
             with self.session.as_default():
                 self.session.run(self.init)
-                output = self.network.inference(self.session, self.test_inputs)
+                output = self.network.inference(self.session, {"test_input_dense": self.test_inputs})
 
             self.assertEqual(output.shape[0], 2)
             self.assertEqual(output.shape[1], 2)

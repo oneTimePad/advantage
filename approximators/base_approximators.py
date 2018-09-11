@@ -28,7 +28,8 @@ class DeepApproximator(object):
         self._reuse = config.reuse
         self._network = None
         self._var_scope_obj = None
-        self._inputs_placeholder = None
+        self._inputs_placeholders = []
+        self._feed_dict = {} # dict of inputs names without ":0" and placeholders as values
 
 
 
@@ -40,6 +41,18 @@ class DeepApproximator(object):
         self._loss = None
         self._applied_gradients = None
 
+
+    @property
+    def inputs_placeholders(self):
+        return self._inputs_placeholders
+
+    @property
+    def feed_dict_keys(self):
+        return list(self._feed_dict.keys())
+
+    @property
+    def feed_dict(self):
+        return self._feed_dict
 
     @property
     def learning_rate(self):
@@ -63,6 +76,10 @@ class DeepApproximator(object):
     @property
     def trainable_parameters(self): #TODO add support for selecting variables to train
         return self._trainable_variables
+
+    @property
+    def trainable_parameters_dict(self):
+        return {v.name: v for v in self._trainable_variables}
 
     @staticmethod
     def parse_specific_model_config(config):
@@ -117,27 +134,52 @@ class DeepApproximator(object):
         with session.as_default():
             session.run(ops, feed_dict=feed_dict)
 
-    def set_up(self, tensor_inputs):
+
+    def set_up(self, tensor_inputs, inputs_placeholders, **kwargs):
         """ TensorFlow construction of the approximator network
                 Args:
-                    tensor_inputs: Tensor inputs to the network
-
-                Returns:
-                    output tensor of the network
+                    tensor_inputs: Tensor inputs to the network (used when overriding)
+                    inputs_placeholders: list, the required placeholders to fill before running
+                    kwargs:
+                        var_scope_obj: scope object for network params
+                        network: the output of the graph
 
                 Raises:
-                    NotImplementedError: if method is not overriden
+                    NotImplementedError: if method is not overriden or no variables in graph
+                    ValueError: missing required kwargs
         """
-        if self._var_scope_obj is None:
-            raise NotImplementedError()
+        if "var_scope_obj" not in kwargs:
+            raise ValueError("Expects var_scope_obj as kwarg")
+        self._var_scope_obj = kwargs["var_scope_obj"]
+
+        if "network" not in kwargs:
+            raise ValueError("Expects network as kwarg")
+        self._network = kwargs["network"]
+
+        if  not isinstance(inputs_placeholders, list):
+            raise ValueError("Expects inputs_placeholders as list")
+        self._inputs_placeholders = inputs_placeholders
+
+        self._feed_dict = {v.name.split(":")[0]: v for v in self._inputs_placeholders}
+
         with self._graph.as_default():
             # setup operations to copy parameters from runtime values
             self._trainable_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self._var_scope_obj.name)
+
+            if len(self._trainable_variables) == 0:
+                # reset
+                self._var_scope_obj = None
+                self._network = None
+                self._inputs_placeholders = []
+                self._feed_dict = {}
+                raise NotImplementedError("No variables in graph")
+
             self._copy_ops_dict = {}
             for param in self._trainable_variables:
                 param_value_plh = tf.placeholder(shape=param.get_shape(), dtype=tf.float32)
                 assign_op = tf.assign(param, param_value_plh)
                 self._copy_ops_dict[param.name] = (param_value_plh, assign_op)
+
 
     def initialize(self, session):
         """ Initialize all network variables
@@ -152,14 +194,51 @@ class DeepApproximator(object):
         with session.as_default():
             session.run(tf.initialize_variables(self.trainable_parameters))
 
+
+    def _produce_feed_dict(self, runtime_tensor_inputs):
+        """Converts dict of containing runtime inputs into proper
+            feed_dict
+                Args:
+                    runtime_tensor_inputs: dict containing runtime_values as values and keys from
+                        feed_dict_keys as keys
+
+                Returns:
+                    feed_dict: dictionary containg placeholders as key and runtime values
+
+                Raises:
+                    ValueError: on missing keys
+        """
+        if not isinstance(runtime_tensor_inputs, dict):
+            raise ValueError("runtime_tensor_inputs, must be a dict with keys according to \
+                    feed_dict_keys as runtime values as values")
+
+        feed_dict = {}
+        for k in self._feed_dict.keys():
+            if not k in runtime_tensor_inputs:
+                raise ValueError("runtime_tensor_inputs dict missing %s" % k)
+            feed_dict[k + ":0"] = runtime_tensor_inputs[k] # TODO: this only accounts for output 0... for now
+
+        return feed_dict
+
     @abstractmethod
     def inference(self, session, runtime_tensor_inputs):
-        """ Performs Runtime inference on the network. Usually setups a Session
+        """ NOTE: Make sure to call _produce_feed_dict
+        Performs Runtime inference on the network. Usually setups a Session
                 Args:
                     session: current runtime session
-                    runtime_tensor_inputs: inputs to be passed in at runtime
+                    runtime_tensor_inputs: dict containing runtime_values as values and keys from
+                        feed_dict_keys as keys
+
+                Returns:
+                    runtime graph output
+
+                Raises:
+                    ValueError: on bad arguments
         """
         raise NotImplementedError()
+
+
+
 
 
     def gradients(self, loss):

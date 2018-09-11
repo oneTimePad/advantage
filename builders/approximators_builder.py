@@ -1,12 +1,16 @@
 from protos.approximators import approximators_pb2
 import approximators
 
-def build(graph, approximators_config, inputs):
+def build(graph, approximators_config, tensor_inputs, inputs_placeholders):
     """Constructs approximator
             Args:
                 approximators_config: configuration file
+                tensor_inputs: the input tensor to the network
+                inputs_placeholders: list of feed_dict elements or input placeholders (might be equal to [tensor_inputs])
+
             Returns:
                 DeepApproximator
+
             Raises:
                 ValueError: invalid configuration or building params
     """
@@ -21,6 +25,6 @@ def build(graph, approximators_config, inputs):
     except AttributeError:
         raise ValueError("Model %s in configuration does not exist" % model)
 
-    model = model_class(graph, approximators_config)#getattr(approximators_config, approximators_config.WhichOneof("model")),  approximators_config.name_scope, approximators_config.reuse)
-    model.set_up(inputs)
+    model = model_class(graph, approximators_config)
+    model.set_up(tensor_inputs, inputs_placeholders)
     return model

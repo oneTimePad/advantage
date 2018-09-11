@@ -15,7 +15,7 @@ class DeepConvolutional(DeepApproximator):
     def enum_padding_to_str(enum_value):
         return helpers_pb2._PADDING.values_by_number[enum_value].name
 
-    def set_up(self, tensor_inputs):
+    def set_up(self, tensor_inputs, inputs_placeholders, **kwargs):
         blocks = self._model.block
         prev = tensor_inputs
         with self._graph.as_default():
@@ -33,16 +33,14 @@ class DeepConvolutional(DeepApproximator):
 
                 output = self._output_fn(prev)
 
-        self._inputs_placeholder = tensor_inputs
-        self._var_scope_obj = scope
-        self._network = output
-        super(DeepConvolutional, self).set_up(tensor_inputs)
+        super(DeepConvolutional, self).set_up(tensor_inputs, inputs_placeholders, network=output, var_scope_obj=scope)
 
     def inference(self, session, runtime_tensor_inputs):
         if not isinstance(session, tf.Session):
             raise ValueError("Must pass in tf.Session")
+        feed_dict = super()._produce_feed_dict(runtime_tensor_inputs)
         with session.as_default():
-            return session.run(self._network, feed_dict={self._inputs_placeholder: runtime_tensor_inputs}) #TODO as of now this is duplicate code, might change later
+            return session.run(self._network, feed_dict=feed_dict) #TODO as of now this is duplicate code, might change later
 
 
 class DeepDense(DeepApproximator):
@@ -53,7 +51,7 @@ class DeepDense(DeepApproximator):
         self._model = self.parse_specific_model_config(config)
         super(DeepDense, self).__init__(graph, config)
 
-    def set_up(self, tensor_inputs):
+    def set_up(self, tensor_inputs, inputs_placeholders, **kwargs):
         blocks = self._model.block
         prev = tensor_inputs
         with self._graph.as_default():
@@ -65,14 +63,12 @@ class DeepDense(DeepApproximator):
                                                                     kernel_initializer=INITIALIZERS[initializer_name])
                 output = self._output_fn(prev)
 
-        self._inputs_placeholder = tensor_inputs
-        self._var_scope_obj = scope
-        self._network = output
-        super(DeepDense, self).set_up(tensor_inputs)
+        super(DeepDense, self).set_up(tensor_inputs, inputs_placeholders, network=output, var_scope_obj=scope)
 
 
     def inference(self, session, runtime_tensor_inputs):
         if not isinstance(session, tf.Session):
             raise ValueError("Must pass in tf.Session")
+        feed_dict = super()._produce_feed_dict(runtime_tensor_inputs)
         with session.as_default():
-            return session.run(self._network, feed_dict={self._inputs_placeholder: runtime_tensor_inputs})
+            return session.run(self._network, feed_dict=feed_dict)

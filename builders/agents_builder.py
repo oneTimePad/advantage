@@ -37,13 +37,13 @@ class AgentBuilders:
         with graph.as_default():
             state_shape = get_env_state_shape(environment)
 
-            tgt_placeholder = tf.placeholder(shape=state_shape, dtype=tf.float32, name="tgt_state_plh")
+            tgt_state_plh = tf.placeholder(shape=state_shape, dtype=tf.float32, name="tgt_state_plh")
 
-            policy_placeholder = tf.placeholder(shape=state_shape, dtype=tf.float32, name="policy_state_plh")
+            policy_state_plh = tf.placeholder(shape=state_shape, dtype=tf.float32, name="policy_state_plh")
 
 
-            tgt_network = approximators_builder.build(graph, tgt_network_config, tgt_placeholder)
-            policy_network = approximators_builder.build(graph, policy_config, policy_placeholder)
+            tgt_network = approximators_builder.build(graph, tgt_network_config, tgt_state_plh, [tgt_state_plh])
+            policy_network = approximators_builder.build(graph, policy_config, policy_state_plh, [policy_state_plh])
 
             return agents.DeepQAgent(graph, session, policy_network, tgt_network, environment)
 

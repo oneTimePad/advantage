@@ -7,7 +7,7 @@ from protos.approximators import approximators_pb2
 import tensorflow as tf
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__)))
-
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 class TestApproximatorsBuilder(unittest.TestCase):
     """ Tests for basic construction of deep models. """ #TODO add more as configuration becomes more complex
     def setUp(self):
@@ -22,7 +22,7 @@ class TestApproximatorsBuilder(unittest.TestCase):
 
         approximators_config = parse_obj_from_file(self.DEEP_CONV_CONFIG, approximators_pb2.Approximators)
 
-        deepConv = build(self.graph, approximators_config, self.inputs_conv)
+        deepConv = build(self.graph, approximators_config, self.inputs_conv, [self.inputs_conv])
 
         if not isinstance(deepConv, DeepConvolutional):
             self.assertEqual(1, 0)
@@ -37,7 +37,7 @@ class TestApproximatorsBuilder(unittest.TestCase):
 
         approximators_config = parse_obj_from_file(self.DEEP_DENSE_CONFIG, approximators_pb2.Approximators)
 
-        deepDense = build(self.graph, approximators_config, self.inputs_dense)
+        deepDense = build(self.graph, approximators_config, self.inputs_dense, [self.inputs_dense])
 
         if not isinstance(deepDense, DeepDense):
             self.assertEqual(1, 0)
