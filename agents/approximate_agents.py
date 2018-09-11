@@ -25,8 +25,11 @@ class DeepQAgent(ApproximateAgent, DiscreteActionSpaceAgent, ActionValueAgent):
     for Neural Networks.
     """
 
-    def __init__(self, graph, session, policy_q_network, target_q_network, environment):
+    def __init__(self, graph, session, policy_q_network, target_q_network, environment, epsilon):
         maximum_fn = partial(np.amax, axis=1)
+
+        self._target = target_q_network
+        self._epsilon = epsilon
 
         super(DeepQAgent, self).__init__(policy=policy_q_network,
                                             environment=environment,
@@ -34,20 +37,32 @@ class DeepQAgent(ApproximateAgent, DiscreteActionSpaceAgent, ActionValueAgent):
                                             session=session,
                                             maximum_function=maximum_fn)
 
+    @property
+    def epsilon(self):
+        return self._epsilon
 
     def set_up(self):
-        pass
+        self._policy.initialize(self._session)
+        self._target.initialize(self._session)
 
     def evaluate_policy(self, state):
-        pass
+        return self._policy.inference(self._session, state)
 
     def improve_policy(self, sarsa_samples):
-        pass
+        """Policy is improved by copying target params to policy network"""
+        target_params = self._target.trainable_parameters_dict
+        with self._session.as_default():
+            target_params_runtime = self._session.run(target_params)
+        self._policy.copy(session, target_params_runtime)
 
-    def improve_target(self, sarsa_samples, targets):
+    def improve_target(self, sarsa_samples):
         """ Trains the Target Q-Network on I.I.D samples from the Replay Buffer
                 Args:
                     sarsa_samples: collection of sarsa samples
-                    targets: the regression targets
         """
+        pass
+
+    @epsilon_greedy
+    def sample_action(self, conditional_policy, training):
+        """Adds Epsilon-Greedy acting during training"""
         pass

@@ -33,7 +33,7 @@ class AgentBuilders:
         """
         tgt_network_config = config.tgt_network
         policy_config = config.policy
-
+        epsilon = config.epsilon
         with graph.as_default():
             state_shape = get_env_state_shape(environment)
 
@@ -45,7 +45,7 @@ class AgentBuilders:
             tgt_network = approximators_builder.build(graph, tgt_network_config, tgt_state_plh, [tgt_state_plh])
             policy_network = approximators_builder.build(graph, policy_config, policy_state_plh, [policy_state_plh])
 
-            return agents.DeepQAgent(graph, session, policy_network, tgt_network, environment)
+            return agents.DeepQAgent(graph, session, policy_network, tgt_network, environment, epsilon)
 
 
 def build(agents_config, graph, environment):

@@ -9,7 +9,7 @@ from protos.agents import agents_pb2
 from agents.approximate_agents import DeepQAgent
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__)))
-
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 
 class TestAgentsBuilder(unittest.TestCase):
     """ Test various builds for Agents """ # This feels useless
