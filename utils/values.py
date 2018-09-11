@@ -5,14 +5,14 @@ import numpy as np
 
 
 
-def compute_q_part_advantage(session, target, state_placeholder, sarsas, gamma):
+def compute_q_part_advantage(session, policy, sarsas, gamma, state_plh_name):
     """ Computes the target part of Q-Learning based Advantage function
             Args:
                 session: session
-                target: tgt network
-                state_placeholder: tf.placeholder for feeding input network
+                policy: tgt network
                 sarsa:  namedtuple.Sarsa from a buffer
                 gamme: one-step discount factor
+                state_plh_name: the name of the placeholder of the state input to network
 
             Returns:
                 a numpy array of targets
@@ -26,9 +26,13 @@ def compute_q_part_advantage(session, target, state_placeholder, sarsas, gamma):
     next_states = [ sarsa.next_state for sarsa in sarsas]
     rewards = [sarsa.reward for sarsa in sarsas]
     dones = [sarsa.done for sarsa in sarsas]
-    with session.as_default():
-        max_qs = np.amax(session.run(target, feed_dict={state_placeholder: next_states}),
-                        axis=1)
+
+    if state_plh_name not in policy.feed_dict_keys:
+        raise ValueError("%s is not in network feed_dict_keys" % state_plh_name)
+
+    q_values = policy.inference(session, {state_plh_name: next_states})
+
+    max_qs = np.amax(q_values, axis=1)
 
     dones = np.array(dones, dtype=np.bool)
 
