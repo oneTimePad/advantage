@@ -45,6 +45,22 @@ class DeepQAgent(ApproximateAgent, DiscreteActionSpaceAgent, ActionValueAgent):
         self._policy.initialize(self._session)
         self._target.initialize(self._session)
 
+        target_net = self._target.network
+
+        # the bellman operator targets for training target network
+        target_plh = tf.placeholder(shape=[None], dtype=tf.float32, name="target_plh")
+        self._target.add_target_placeholder(target_plh)
+
+        # the actions taken by the policy leading to the bellman transition
+        action_taken_plh = tf.placeholder(shape=[None], dtype=tf.int32, name="action_taken_plh")
+        self._target.add_target_placeholder(action_taken_plh)
+
+        # the mean square error between target and network
+        loss = tf.reduce_mean(tf.square(target_plh - tf.one_hot(indices=action_taken_plh, depth=self.num_of_actions) * target_net))
+
+        gradients = self._target.gradients(loss)
+        self._target.apply_gradients(gradients)
+
     def evaluate_policy(self, state):
         return self._policy.inference(self._session, state)
 
@@ -56,11 +72,17 @@ class DeepQAgent(ApproximateAgent, DiscreteActionSpaceAgent, ActionValueAgent):
         self._policy.copy(session, target_params_runtime)
 
     def improve_target(self, sarsa_samples):
-        """ Trains the Target Q-Network on I.I.D samples from the Replay Buffer
+        """ Trains the Target Q-Network on I.I.D samples batch from the Replay Buffer
                 Args:
-                    sarsa_samples: collection of sarsa samples
+                    sarsa_samples: list of Sarsa samples
         """
-        pass
+        states, actions_taken, targets = apply_bellman_operator(self._session, self._policy, sarsa_samples, self._gamma, "policy_state_plh")
+
+        feed_dict_in = {"tgt_state_plh" : states}
+
+        feed_dict_target = {"target_plh" : targets, "action_taken_plh": actions_taken}
+
+        self._target.update(session, feed_dict_in, feed_dict_target)
 
     @epsilon_greedy
     def sample_action(self, conditional_policy, training):

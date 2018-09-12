@@ -31,7 +31,7 @@ class DeepApproximator(object):
         self._inputs_placeholders = []
         self._feed_dict = {} # dict of inputs names without ":0" and placeholders as values
 
-
+        self._update_target_plhs_dict = {} # placeholders for targets in parameter updates
 
         self._optimizer = OPTIMIZERS[self.enum_optimizer_to_str(config.optimizer)](config.learning_rate)
 
@@ -116,6 +116,11 @@ class DeepApproximator(object):
     def enum_initializer_to_str(enum_value):
         return helpers_pb2._INITIALIZER.values_by_number[enum_value].name
 
+    def add_target_placeholder(self, placeholder):
+        """ Let's network know about placeholders used for specifying targets in loss """
+
+        self._update_target_plhs_dict[placeholder.name.split()[0]] = placeholder
+
     def copy(self, session, runtime_params):
         """Runs operations to copy runtime values to this models params
             Args:
@@ -195,12 +200,13 @@ class DeepApproximator(object):
             session.run(tf.initialize_variables(self.trainable_parameters))
 
 
-    def _produce_feed_dict(self, runtime_tensor_inputs):
+    def __produce_feed_dict(self, runtime_tensor_inputs, in_feed_dict):
         """Converts dict of containing runtime inputs into proper
             feed_dict
                 Args:
                     runtime_tensor_inputs: dict containing runtime_values as values and keys from
                         feed_dict_keys as keys
+                    in_feed_dict: the dictionary of placeholders to look at
 
                 Returns:
                     feed_dict: dictionary containg placeholders as key and runtime values
@@ -213,12 +219,20 @@ class DeepApproximator(object):
                     feed_dict_keys as runtime values as values")
 
         feed_dict = {}
-        for k in self._feed_dict.keys():
+        for k in in_feed_dict.keys():
             if not k in runtime_tensor_inputs:
                 raise ValueError("runtime_tensor_inputs dict missing %s" % k)
             feed_dict[k + ":0"] = runtime_tensor_inputs[k] # TODO: this only accounts for output 0... for now
 
         return feed_dict
+
+
+    def _produce_feed_dict(self, runtime_tensor_inputs):
+        return self.__produce_feed_dict(runtime_tensor_inputs, self._feed_dict)
+
+    def _produce_update_target_dict(self, runtime_tensor_targets):
+        return self.__produce_feed_dict(runtime_tensor_targets, self._update_target_plhs_dict)
+
 
     @abstractmethod
     def inference(self, session, runtime_tensor_inputs):
@@ -236,10 +250,6 @@ class DeepApproximator(object):
                     ValueError: on bad arguments
         """
         raise NotImplementedError()
-
-
-
-
 
     def gradients(self, loss):
         """ Compute the network gradients for parameter update
@@ -259,13 +269,17 @@ class DeepApproximator(object):
         self._train_op = self._optimizer.apply_gradients(gradients)
 
 
-    def update(self, session, runtime_inputs):
+    def update(self, session, runtime_inputs, runtime_targets):
         """ Perform a network parameter update
                 Args:
                     runtime_inputs: usually training batch inputs containg placeholders and values
+                    runtime_targets: training batch targets
         """
+        runtime_batch = {}
+        runtime_batch.extend(self._produce_feed_dict(runtime_inputs))
+        runtime_batch.extend(self._produce_update_target_dict(runtime_targets))
         with session.as_default():
-            session.run(self._train_op, feed_dict=runtime_inputs)
+            session.run(self._train_op, feed_dict=runtime_batch)
 
 
 
