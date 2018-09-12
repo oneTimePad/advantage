@@ -5,7 +5,7 @@ import numpy as np
 
 
 
-def compute_q_part_advantage(session, policy, sarsas, gamma, state_plh_name):
+def apply_bellman_operator(session, policy, sarsas, gamma, state_plh_name):
     """ Computes the target part of Q-Learning based Advantage function
             Args:
                 session: session
@@ -15,6 +15,8 @@ def compute_q_part_advantage(session, policy, sarsas, gamma, state_plh_name):
                 state_plh_name: the name of the placeholder of the state input to network
 
             Returns:
+                list of states before bellman transition
+                list of actions leading to the bellman transition
                 a numpy array of targets
 
             Raises:
@@ -23,9 +25,7 @@ def compute_q_part_advantage(session, policy, sarsas, gamma, state_plh_name):
     if not isinstance(session, tf.Session):
         raise ValueError("Must pass in a tf.Session object")
 
-    next_states = [ sarsa.next_state for sarsa in sarsas]
-    rewards = [sarsa.reward for sarsa in sarsas]
-    dones = [sarsa.done for sarsa in sarsas]
+    states, actions, rewards, dones, next_states, next_actions = zip(*sarsas)
 
     if state_plh_name not in policy.feed_dict_keys:
         raise ValueError("%s is not in network feed_dict_keys" % state_plh_name)
@@ -36,4 +36,4 @@ def compute_q_part_advantage(session, policy, sarsas, gamma, state_plh_name):
 
     dones = np.array(dones, dtype=np.bool)
 
-    return np.array(rewards) + gamma * np.invert(dones) * max_qs
+    return list(states), list(actions), np.array(rewards) + gamma * np.invert(dones) * max_qs
