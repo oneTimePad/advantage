@@ -31,9 +31,8 @@ class DeepConvolutional(DeepApproximator):
                                                     kernel_initializer=INITIALIZERS[initializer_name])
 
 
-                output = self._output_fn(prev)
 
-        super(DeepConvolutional, self).set_up(tensor_inputs, inputs_placeholders, network=output, var_scope_obj=scope)
+        super(DeepConvolutional, self).set_up(tensor_inputs, inputs_placeholders, last_block=prev, var_scope_obj=scope)
 
     def inference(self, session, runtime_tensor_inputs):
         if not isinstance(session, tf.Session):
@@ -61,14 +60,13 @@ class DeepDense(DeepApproximator):
                     initializer_name = self.enum_initializer_to_str(block.initializer)
                     prev = tf.layers.dense(prev, block.num_units, activation=ACTIVATIONS[activation_name],
                                                                     kernel_initializer=INITIALIZERS[initializer_name])
-                output = self._output_fn(prev)
 
-        super(DeepDense, self).set_up(tensor_inputs, inputs_placeholders, network=output, var_scope_obj=scope)
+        super(DeepDense, self).set_up(tensor_inputs, inputs_placeholders, last_block=prev, var_scope_obj=scope)
 
 
     def inference(self, session, runtime_tensor_inputs):
         if not isinstance(session, tf.Session):
             raise ValueError("Must pass in tf.Session")
         feed_dict = super()._produce_feed_dict(runtime_tensor_inputs)
-        with session.as_default():
-            return session.run(self._network, feed_dict=feed_dict)
+        #with self._graph.as_default():
+        return session.run(self._network, feed_dict=feed_dict)

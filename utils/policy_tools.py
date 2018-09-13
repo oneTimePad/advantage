@@ -16,7 +16,7 @@ def epsilon_greedy(fn):
 
         if not hasattr(self, "num_of_actions"):
             raise ValueError("decorator expects object to have attribute num_of_actions")
-        
+
         if not hasattr(self, "epsilon"):
             raise ValueError("decorator expects object to have attribute epsilon")
 
@@ -28,7 +28,7 @@ def epsilon_greedy(fn):
         if training:
             num_actions = self.num_of_actions
             prob = random.random()
-            return action if prob > self.epsilon else np.random.sample(num_actions, 1)
+            return action if prob > self.epsilon else self.action_space.sample()#np.random.choice(range(num_actions), 1)[0]
         else:
             return action
 

@@ -1,4 +1,5 @@
 import gym
+import numpy as np
 from abc import ABCMeta
 from abc import abstractmethod
 from utils.buffers import Sarsa
@@ -39,6 +40,10 @@ class LearningAgent(object):
     @property
     def environment(self):
         return self._environment
+
+    @property
+    def action_space(self):
+        return self.environment.action_space
 
     @abstractmethod
     def set_up(self):
@@ -93,10 +98,10 @@ class LearningAgent(object):
         if self._done:
             s = self._environment.reset()
         conditional_policy = self.evaluate_policy(s)
-        a = self.sample_action(conditional_policy, trainig)
+        a = self.sample_action(conditional_policy, training)
         self._state, reward, self._done, _ = self._environment.step(a)
         self._steps += 1
-        self._reward += reward
+        self._total_reward += reward
         return Sarsa(state=s, action=a,
                     reward=reward, done=self._done,
                     next_state=self._state, next_action=None)
@@ -112,8 +117,8 @@ class LearningAgent(object):
                 Raises:
                     StopIteration: after num_steps
         """
-        for step in range(1, num_steps):
-            yield step, self.act_in_env(training)
+        for step in range(0, num_steps):
+            yield (step, self.act_in_env(training))
 
         raise StopIteration("Max number of steps exceeded")
 
@@ -128,8 +133,7 @@ class ActionValueAgent(LearningAgent):
 
     def __init__(self, policy, environment,  maximum_function, **kwargs):
         self._maximum_function = maximum_function
-
-        super(ActionValueAgent, self).__init__(policy=policy, environment=environment, **kwargs)
+        super().__init__(policy=policy, environment=environment, **kwargs)
 
     @property
     def maximum_function(self):
@@ -166,19 +170,33 @@ class DiscreteActionSpaceAgent(LearningAgent):
 
 
     def __init__(self, policy, environment, **kwargs):
-
         action_space = environment.action_space
 
         if not isinstance(action_space, gym.spaces.Discrete):
             raise Exception() # TODO: replace with specific exception
 
         self._num_of_actions = action_space.n
-
-        super(DiscreteActionSpaceAgent, self).__init__(policy=policy, environment=environment, **kwargs)
+        self.sample_action = self._action_wrapper(self.sample_action)
+        super().__init__(policy=policy, environment=environment, **kwargs)
 
     @property
     def num_of_actions(self):
         return self._num_of_actions
+
+    def _action_wrapper(self, fn):
+        """ It's hard to say where this goes atm, but it's related to the fact
+        that np.argmax on a (1, N) ndarray returns a one element array...
+        Might need to go in ActionValueAgent, which could technically generalize to Continuous
+        Agents, where this would then pose a problem.
+        """
+        #TODO Look for a better place to put this...
+        def wrapper(conditional_policy, training):
+            action = fn(conditional_policy, training)
+            if isinstance(action, np.ndarray):
+                return int(action[0])
+            else:
+                return int(action)
+        return wrapper
 
 class ContinuousActionSpaceAgent(LearningAgent):
     __metaclass__ = ABCMeta
@@ -216,7 +234,7 @@ class ContinuousActionSpaceAgent(LearningAgent):
         """
         raise NotImplementedError()
 
-    def sample_action(self, conditional_policy):
+    def sample_action(self, conditional_policy, training):
         action = self._continuous_distribution_sample(conditional_policy)
 
         if not isinstance(conditional_policy, np.ndarray):

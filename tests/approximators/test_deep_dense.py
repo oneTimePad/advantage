@@ -63,13 +63,12 @@ class TestDeepDense(unittest.TestCase):
             self.init = tf.global_variables_initializer()
 
     def test_initialize(self):
-        # TODO
-        pass
+        self.network.initialize(self.session)
 
     def test_inference(self):
         with self.graph.as_default():
             with self.session.as_default():
-                self.session.run(self.init)
+                self.network.initialize(self.session)
                 output = self.network.inference(self.session, {"test_input_dense": self.test_inputs})
 
             self.assertEqual(output.shape[0], 2)

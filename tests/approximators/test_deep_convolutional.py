@@ -77,12 +77,9 @@ class TestDeepConvolutional(unittest.TestCase):
         self.network = DeepConvolutional(self.graph, self.deepConvConfig)
         self.network.set_up(self.inputs_conv, [self.inputs_conv])
 
-        with self.graph.as_default():
-            self.init = tf.global_variables_initializer()
-
     def test_inference(self):
         with self.session.as_default():
-            self.session.run(self.init)
+            self.network.initialize(self.session)
             output = self.network.inference(self.session, {"test_input_conv": self.test_inputs})
 
         self.assertEqual(output.shape[0], 2)

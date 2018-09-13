@@ -33,13 +33,14 @@ class DeepApproximator(object):
 
         self._update_target_plhs_dict = {} # placeholders for targets in parameter updates
 
-        self._optimizer = OPTIMIZERS[self.enum_optimizer_to_str(config.optimizer)](config.learning_rate)
-
-        self._output_fn = self.parse_output_proto_to_fn(self._config)
 
         self._learning_rate = config.learning_rate
+
+        self._optimizer = OPTIMIZERS[self.enum_optimizer_to_str(config.optimizer)](self._learning_rate)
+
         self._loss = None
         self._applied_gradients = None
+        self._init_op = None
 
 
     @property
@@ -80,6 +81,10 @@ class DeepApproximator(object):
     @property
     def trainable_parameters_dict(self):
         return {v.name: v for v in self._trainable_variables}
+
+    @property
+    def init_op(self):
+        return self._init_op
 
     @staticmethod
     def parse_specific_model_config(config):
@@ -136,7 +141,9 @@ class DeepApproximator(object):
 
         ops = [v[1] for v in self._copy_ops_dict.values()]
         feed_dict = { v[0]: runtime_params[k] for k,v in self._copy_ops_dict.items() }
-        with session.as_default():
+        #with session.as_default():
+
+        with self._graph.as_default():
             session.run(ops, feed_dict=feed_dict)
 
 
@@ -147,7 +154,7 @@ class DeepApproximator(object):
                     inputs_placeholders: list, the required placeholders to fill before running
                     kwargs:
                         var_scope_obj: scope object for network params
-                        network: the output of the graph
+                        last_block: the end of the network without output head
 
                 Raises:
                     NotImplementedError: if method is not overriden or no variables in graph
@@ -157,9 +164,9 @@ class DeepApproximator(object):
             raise ValueError("Expects var_scope_obj as kwarg")
         self._var_scope_obj = kwargs["var_scope_obj"]
 
-        if "network" not in kwargs:
-            raise ValueError("Expects network as kwarg")
-        self._network = kwargs["network"]
+        if "last_block" not in kwargs:
+            raise ValueError("Expects last_block as kwarg")
+        last_block = kwargs["last_block"]
 
         if  not isinstance(inputs_placeholders, list):
             raise ValueError("Expects inputs_placeholders as list")
@@ -167,8 +174,11 @@ class DeepApproximator(object):
 
         self._feed_dict = {v.name.split(":")[0]: v for v in self._inputs_placeholders}
 
+
+
         with self._graph.as_default():
-            # setup operations to copy parameters from runtime values
+
+            # pre-fetch to check if caller has constructed blocks in graph
             self._trainable_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self._var_scope_obj.name)
 
             if len(self._trainable_variables) == 0:
@@ -179,11 +189,19 @@ class DeepApproximator(object):
                 self._feed_dict = {}
                 raise NotImplementedError("No variables in graph")
 
+            # build optimizer and add output
+            with tf.variable_scope(self._var_scope_obj):
+                self._network = self.parse_output_proto_to_fn(self._config)(last_block)
+
+            # setup operations to copy parameters from runtime values
+            self._trainable_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self._var_scope_obj.name)
+
             self._copy_ops_dict = {}
             for param in self._trainable_variables:
                 param_value_plh = tf.placeholder(shape=param.get_shape(), dtype=tf.float32)
                 assign_op = tf.assign(param, param_value_plh)
                 self._copy_ops_dict[param.name] = (param_value_plh, assign_op)
+
 
 
     def initialize(self, session):
@@ -194,10 +212,12 @@ class DeepApproximator(object):
                 Raises:
                     ValueError: for not tf.Session
         """
-        if not isinstance(session, tf.Session): #TODO add a test for this
+        if not isinstance(session, tf.Session):
             raise ValueError("Must pass in tf.Session")
-        with session.as_default():
-            session.run(tf.initialize_variables(self.trainable_parameters))
+        with self._graph.as_default():
+            #with session.as_default():\
+            self._init_op = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self._var_scope_obj.name))
+        session.run(self._init_op)
 
 
     def __produce_feed_dict(self, runtime_tensor_inputs, in_feed_dict):
@@ -257,16 +277,18 @@ class DeepApproximator(object):
             Returns:
                 gradients tensor
         """
-        self._loss = loss
-        return self._optimizer.compute_gradients(loss, self.trainable_parameters)
+        with self._graph.as_default():
+            self._loss = loss
+            return self._optimizer.compute_gradients(loss, self.trainable_parameters)
 
     def apply_gradients(self, gradients):
         """ Applied gradients to network optimizer and creates train operation
                 Args:
                     gradients in proper tensorflow format
         """
-        self._applied_gradients
-        self._train_op = self._optimizer.apply_gradients(gradients)
+        with self._graph.as_default():
+            self._applied_gradients = gradients
+            self._train_op = self._optimizer.apply_gradients(gradients)
 
 
     def update(self, session, runtime_inputs, runtime_targets):
@@ -278,8 +300,8 @@ class DeepApproximator(object):
         runtime_batch = {}
         runtime_batch.extend(self._produce_feed_dict(runtime_inputs))
         runtime_batch.extend(self._produce_update_target_dict(runtime_targets))
-        with session.as_default():
-            session.run(self._train_op, feed_dict=runtime_batch)
+        #with session.as_default():
+        session.run(self._train_op, feed_dict=runtime_batch)
 
 
 
@@ -320,8 +342,8 @@ def value(tensor_inputs, **kwargs):
     shape = tensor_inputs.get_shape()
     kernel_h = int(shape[1])
     kernel_w = int(shape[2])
-    conv = tf.layers.conv2d(tensor_inputs, filters=kwargs['num_actions'], kernel_size=[kernel_h, kernel_w], activation=None)
-    return tf.squeeze(conv)
+    conv = tf.layers.conv2d(tensor_inputs, filters=kwargs['num_actions'], kernel_size=[kernel_h, kernel_w], activation=None, name="value")
+    return tf.squeeze(conv, axis=[1, 2])
 
 def gaussian(tensor_inputs, **kwargs):
     """Useful for constructing output layers for continuous stochastic policy
