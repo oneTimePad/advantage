@@ -1,7 +1,7 @@
 from abc import ABCMeta
 from abc import abstractmethod
 from protos.approximators import helpers_pb2
-from functools import partial
+from functools import partial, reduce
 from utils.proto_parser import proto_to_dict
 import tensorflow as tf
 
@@ -35,8 +35,7 @@ class DeepApproximator(object):
 
 
         self._learning_rate = config.learning_rate
-
-        self._optimizer = OPTIMIZERS[self.enum_optimizer_to_str(config.optimizer)](self._learning_rate)
+        self._optimizer = OPTIMIZERS[self.enum_optimizer_to_str(self._config.optimizer)](self._learning_rate)
 
         self._loss = None
         self._applied_gradients = None
@@ -121,10 +120,21 @@ class DeepApproximator(object):
     def enum_initializer_to_str(enum_value):
         return helpers_pb2._INITIALIZER.values_by_number[enum_value].name
 
+    def strip_and_replace_scope(self, in_str):
+        """ Strip highest scope and replace with 'this'/self Approximators highest scope
+                Args:
+                    in_str: the fully-qualified variable name
+
+                Returns:
+                    variable name with scope from 'this'/self Approximator
+        """
+        return self._var_scope_obj.name + "/" + reduce(lambda x, y: x + "/" + y, in_str.split("/")[1:])
+
+
     def add_target_placeholder(self, placeholder):
         """ Let's network know about placeholders used for specifying targets in loss """
 
-        self._update_target_plhs_dict[placeholder.name.split()[0]] = placeholder
+        self._update_target_plhs_dict[placeholder.name.split(':')[0]] = placeholder
 
     def copy(self, session, runtime_params):
         """Runs operations to copy runtime values to this models params
@@ -140,7 +150,8 @@ class DeepApproximator(object):
             raise ValueError("runtime_params must a be dict with param names and values")
 
         ops = [v[1] for v in self._copy_ops_dict.values()]
-        feed_dict = { v[0]: runtime_params[k] for k,v in self._copy_ops_dict.items() }
+
+        feed_dict = { v[0] : runtime_params[k] for k,v in self._copy_ops_dict.items() }
         #with session.as_default():
 
         with self._graph.as_default():
@@ -192,6 +203,7 @@ class DeepApproximator(object):
             # build optimizer and add output
             with tf.variable_scope(self._var_scope_obj):
                 self._network = self.parse_output_proto_to_fn(self._config)(last_block)
+
 
             # setup operations to copy parameters from runtime values
             self._trainable_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self._var_scope_obj.name)
@@ -288,7 +300,8 @@ class DeepApproximator(object):
         """
         with self._graph.as_default():
             self._applied_gradients = gradients
-            self._train_op = self._optimizer.apply_gradients(gradients)
+            with tf.variable_scope(self._var_scope_obj):
+                self._train_op = self._optimizer.apply_gradients(gradients)
 
 
     def update(self, session, runtime_inputs, runtime_targets):
@@ -298,8 +311,8 @@ class DeepApproximator(object):
                     runtime_targets: training batch targets
         """
         runtime_batch = {}
-        runtime_batch.extend(self._produce_feed_dict(runtime_inputs))
-        runtime_batch.extend(self._produce_update_target_dict(runtime_targets))
+        runtime_batch.update(self._produce_feed_dict(runtime_inputs))
+        runtime_batch.update(self._produce_update_target_dict(runtime_targets))
         #with session.as_default():
         session.run(self._train_op, feed_dict=runtime_batch)
 

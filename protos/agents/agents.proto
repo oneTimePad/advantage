@@ -9,4 +9,6 @@ message Agents {
         DeepQAgent deepQAgent = 1;
     }
 
+    required float discount_factor = 2;
+
 }

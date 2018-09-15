@@ -6,6 +6,7 @@ from builders.agents_builder import build
 from utils.proto_parser import parse_obj_from_file
 from protos.agents import agents_pb2
 from agents.approximate_agents import DeepQAgent
+
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__)))
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
@@ -30,6 +31,23 @@ class TestDeepQAgent(unittest.TestCase):
         self.dqn_agent.set_up()
         steps, sarsa = list(self.dqn_agent.act_for_steps(1, training=False))[0]
         print(steps, sarsa)
+
+    def test_improve_target(self):
+        self.dqn_agent.set_up()
+
+        sarsa_buffer = []
+
+        for step, sarsa in self.dqn_agent.act_for_steps(5, training=True):
+            sarsa_buffer.append(sarsa)
+
+
+        self.dqn_agent.improve_target(sarsa_buffer)
+
+    def test_improve_policy(self):
+        self.dqn_agent.set_up()
+
+        self.dqn_agent.improve_policy(None)
+
 
 
 

@@ -1,4 +1,5 @@
 from protos.agents import agents_pb2
+from functools import partial
 import tensorflow as tf
 import agents
 import builders.approximators_builder as approximators_builder
@@ -17,15 +18,23 @@ def get_env_state_shape(environment):
 
     return [None] + list(state_shape)
 
+
+def function_attr(fn, **kwargs):
+    """Add a set of keyword attrs to a function"""
+    for k, v  in kwargs.items():
+        setattr(f, k, v)
+    return fn
+
+
 class AgentBuilders:
 
     @staticmethod
-    def build_DeepQAgent(graph, session, environment, config):
+    def build_DeepQAgent(agent, graph, environment, config):
         """Builds the DeepQAgent
             Args:
+                agent: the agent to build,
                 graph: tf.Graph
-                session: tf.Session
-                _environment: Environment or GymEnv
+                environment: agent environment
                 config: the deep_q_agent protobuf object
 
             Returns:
@@ -37,6 +46,7 @@ class AgentBuilders:
         with graph.as_default():
             state_shape = get_env_state_shape(environment)
 
+
             tgt_state_plh = tf.placeholder(shape=state_shape, dtype=tf.float32, name="tgt_state_plh")
 
             policy_state_plh = tf.placeholder(shape=state_shape, dtype=tf.float32, name="policy_state_plh")
@@ -45,7 +55,7 @@ class AgentBuilders:
             tgt_network = approximators_builder.build(graph, tgt_network_config, tgt_state_plh, [tgt_state_plh])
             policy_network = approximators_builder.build(graph, policy_config, policy_state_plh, [policy_state_plh])
 
-            return agents.DeepQAgent(graph, session, policy_network, tgt_network, environment, epsilon)
+            return agent(policy_network, tgt_network, epsilon)
 
 
 def build(agents_config, graph, environment):
@@ -65,10 +75,24 @@ def build(agents_config, graph, environment):
 
 
     try:
-        agent_builder = eval("AgentBuilders.build_" + agent_name)
+        agent_builder = eval("AgentBuilders.build_" + agent_name) #TODO use getattr
     except AttributeError:
-        raise ValueError("Model %s in configuration does not exist" % model)
+        raise ValueError("Agent %s in configuration does not exist" % agent_name)
+
+    try:
+        agent = getattr(agents, agent_name)
+    except AttributeError:
+        raise ValueError("Agent %s in configuration does not exist" % agent_name)
 
     session = tf.Session(graph=graph)
 
-    return agent_builder(graph, session, environment, getattr(agents_config, agent_name_lower)) #TODO there might be other configuration options for agents later on
+    agent = partial(agent,
+                    graph,
+                    session,
+                    environment,
+                    agents_config.discount_factor)
+
+    return agent_builder(agent,
+                         graph,
+                         environment,
+                         getattr(agents_config, agent_name_lower)) #TODO there might be other configuration options for agents later on

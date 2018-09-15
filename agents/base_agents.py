@@ -16,7 +16,7 @@ class LearningAgent(object):
     formulation.
     """
 
-    def __init__(self, policy, environment, **kwargs):
+    def __init__(self, policy, environment, discount_factor, **kwargs):
         self._policy = policy
         self._environment = environment
         self._done = True
@@ -24,6 +24,11 @@ class LearningAgent(object):
         self._steps = 0 # total number of steps gone
         self._total_reward = 0
 
+        self._discount_factor = discount_factor
+
+    @property
+    def discount_factor(self):
+        return self._discount_factor
 
     @property
     def total_reward(self):
@@ -96,31 +101,29 @@ class LearningAgent(object):
                 sarsa element
         """
         if self._done:
-            s = self._environment.reset()
-        conditional_policy = self.evaluate_policy(s)
+            self._state = self._environment.reset()
+        conditional_policy = self.evaluate_policy(self._state)
         a = self.sample_action(conditional_policy, training)
         self._state, reward, self._done, _ = self._environment.step(a)
         self._steps += 1
         self._total_reward += reward
-        return Sarsa(state=s, action=a,
+        return Sarsa(state=self._state, action=a,
                     reward=reward, done=self._done,
                     next_state=self._state, next_action=None)
 
     def act_for_steps(self, num_steps, training):
-        """ Agent acts in environment for num_steps
+        """ Generator: Agent acts in environment for num_steps
                 Args:
                     num_steps: maximum number of steps to act for
                     training: whether the agent is training
 
-                Returns: step number, return value of act_in_env
+                Yields:
+                    step number, return value of act_in_env
 
-                Raises:
-                    StopIteration: after num_steps
         """
         for step in range(0, num_steps):
             yield (step, self.act_in_env(training))
 
-        raise StopIteration("Max number of steps exceeded")
 
 
 
@@ -131,9 +134,16 @@ class ActionValueAgent(LearningAgent):
     samples from the environment and boostrapping. The Action-Value is used for control.
     """
 
-    def __init__(self, policy, environment,  maximum_function, **kwargs):
+    def __init__(self, policy,
+                environment,
+                discount_factor,
+                maximum_function,
+                **kwargs):
         self._maximum_function = maximum_function
-        super().__init__(policy=policy, environment=environment, **kwargs)
+        super().__init__(policy=policy,
+                        environment=environment,
+                        discount_factor=discount_factor,
+                        **kwargs)
 
     @property
     def maximum_function(self):
@@ -150,10 +160,17 @@ class PolicyGradientAgent(LearningAgent):
     gradient of the expected reward function and uses it to directly update the policy
     """
 
-    def __init__(self, policy, environment, expected_reward, **kwargs):
+    def __init__(self, policy,
+                environment,
+                discount_factor,
+                expected_reward,
+                **kwargs):
         self._expected_reward = expected_reward # TODO create a special expected reward class
 
-        super(PolicyGradientAgent, self).__init__(policy=policy, environment=environment, **kwargs)
+        super(PolicyGradientAgent, self).__init__(policy=policy,
+                                                environment=environment,
+                                                discount_factor=discount_factor,
+                                                **kwargs)
 
     @property
     def expected_reward(self):
@@ -169,7 +186,10 @@ class DiscreteActionSpaceAgent(LearningAgent):
     """ Represents an RL Agent with a discrete agent space """
 
 
-    def __init__(self, policy, environment, **kwargs):
+    def __init__(self, policy,
+                environment,
+                discount_factor,
+                **kwargs):
         action_space = environment.action_space
 
         if not isinstance(action_space, gym.spaces.Discrete):
@@ -177,7 +197,10 @@ class DiscreteActionSpaceAgent(LearningAgent):
 
         self._num_of_actions = action_space.n
         self.sample_action = self._action_wrapper(self.sample_action)
-        super().__init__(policy=policy, environment=environment, **kwargs)
+        super().__init__(policy=policy,
+                        environment=environment,
+                        discount_factor=discount_factor,
+                        **kwargs)
 
     @property
     def num_of_actions(self):
@@ -202,7 +225,10 @@ class ContinuousActionSpaceAgent(LearningAgent):
     __metaclass__ = ABCMeta
     """ Represents an RL Agent with a continuous action space """
 
-    def __init__(self, policy, environment, **kwargs):
+    def __init__(self, policy,
+                environment,
+                discount_factor,
+                **kwargs):
 
         action_space = self._environment.action
 
@@ -213,7 +239,10 @@ class ContinuousActionSpaceAgent(LearningAgent):
         self._action_high = action_space.high
         self._action_shape = action_space.shape
 
-        super(ContinuousActionSpaceAgent, self).__init__(policy=policy, environment=environment, **kwargs)
+        super(ContinuousActionSpaceAgent, self).__init__(policy=policy,
+                                                        environment=environment,
+                                                        discount_factor=discount_factor,
+                                                        **kwargs)
 
     @property
     def action_low(self):
