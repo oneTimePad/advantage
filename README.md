@@ -5,9 +5,9 @@ First version is still in development and will support the simple DeepQNetwork. 
 
 
 Planned additions:
-  Discrete:
-    C51, Implicit Quantile Agents
-  Continuous:
-    Evolved Policy Gradients
-    Proximal Policy Optimization
-  Multi-agent
+  - Discrete:
+    - C51, Implicit Quantile Agents
+  - Continuous:
+     - Evolved Policy Gradients
+     - Proximal Policy Optimization
+  - Multi-agent
