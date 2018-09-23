@@ -6,6 +6,7 @@ from builders.agents_builder import build
 from utils.proto_parser import parse_obj_from_file
 from protos.agents import agents_pb2
 from agents.approximate_agents import DeepQAgent
+from utils.sarsa import Sarsa
 
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__)))
@@ -41,7 +42,7 @@ class TestDeepQAgent(unittest.TestCase):
             sarsa_buffer.append(sarsa)
 
 
-        self.dqn_agent.improve_target(sarsa_buffer)
+        self.dqn_agent.improve_target(Sarsa.split_list_to_np(sarsa_buffer))
 
     def test_improve_policy(self):
         self.dqn_agent.set_up()

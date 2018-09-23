@@ -12,5 +12,6 @@ python3 tests/builders/test_agents_builder.py
 python3 tests/builders/test_approximators_builder.py
 
 #utils
+python3 tests/utils/test_sarsa.py
 python3 tests/utils/test_buffers.py
 python3 tests/utils/test_values.py

@@ -6,11 +6,14 @@ from .base_agents import LearningAgent, ActionValueAgent, DiscreteActionSpaceAge
 from utils.values import apply_bellman_operator
 class ApproximateAgent(LearningAgent):
     """Approximate Learning Agent"""
-    def __init__(self, policy, environment, graph, session, **kwargs):
+    def __init__(self, policy, environment, discount_factor, graph, session, **kwargs):
         self._graph = graph
         self._session = session
 
-        super().__init__(policy=policy, environment=environment, **kwargs)
+        super().__init__(policy=policy,
+                        environment=environment,
+                        discount_factor=discount_factor,
+                        **kwargs)
 
     @property
     def graph(self):
@@ -19,6 +22,7 @@ class ApproximateAgent(LearningAgent):
     @property
     def session(self):
         return self._session
+
 
 class DeepQAgent(ApproximateAgent, DiscreteActionSpaceAgent, ActionValueAgent):
     """ Implements the DeepQNetworks Agent. The DQN Agent
@@ -57,11 +61,11 @@ class DeepQAgent(ApproximateAgent, DiscreteActionSpaceAgent, ActionValueAgent):
 
         with self._graph.as_default():
             # the bellman operator targets for training target network
-            target_plh = tf.placeholder(shape=[None], dtype=tf.float32, name="target_plh")
+            target_plh = tf.placeholder(shape=[None, 1], dtype=tf.float32, name="target_plh")
             self._target.add_target_placeholder(target_plh)
 
             # the actions taken by the policy leading to the bellman transition
-            action_taken_plh = tf.placeholder(shape=[None], dtype=tf.int32, name="action_taken_plh")
+            action_taken_plh = tf.placeholder(shape=[None, 1], dtype=tf.int32, name="action_taken_plh")
             self._target.add_target_placeholder(action_taken_plh)
 
             # the mean square error between target and network
@@ -96,7 +100,9 @@ class DeepQAgent(ApproximateAgent, DiscreteActionSpaceAgent, ActionValueAgent):
         feed_dict_in = {"tgt_state_plh" : states}
 
         feed_dict_target = {"target_plh" : targets, "action_taken_plh": actions_taken}
+
         self._target.update(self._session, feed_dict_in, feed_dict_target)
+
 
     @epsilon_greedy
     def sample_action(self, conditional_policy, training):

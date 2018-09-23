@@ -1,36 +1,34 @@
 import collections
 
-
-""" Sarsa tuple element to put in experience replay buffer """
-Sarsa = collections.namedtuple("Sarsa", ["state", "action", "reward", "done", "next_state", "next_action"])
-
-
 class ExperienceReplayBuffer(object):
-    """Allows for collecting various SARSA tuples taken by an agent.
+    """Allows for collecting various SARSA(usually but not required) tuples taken by an agent.
     This buffer is commonly used in many approximate RL algorithms to
     allow for I.I.D data to traing non-linear approximators (i.e. NN)
+
+    ExperienceReplayBuffer is type-safe
     """
 
-    def __init__(self, buffer_size, add_padding=False, normalizing=False):
+    def __init__(self, buffer_size, buffer_type):
         """
             Args:
                 buffer_size: size of deque
-                add_padding: whether to fill deque up with padded values
+                buffer_type: type of elements to be pushed to buffer
         """
-        self._normalizing = normalizing # TODO add normalizing feature
 
         self._buffer_size =  buffer_size
 
+        self._buffer_type = buffer_type
+
+        if not hasattr(buffer_type, "are_compatible"):
+            raise ValueError("buffer_type must implement 'are_compatible' classmethod")
+        self._are_compatible = buffer_type.are_compatible
+
+        self._template_item = None
+
         self._cur_buffer_size = 0
 
-        if not add_padding:
-            self._buffer = collections.deque([], maxlen=buffer_size)
-        else:
-            # construct empty Sarsa elements for paddings
-            NUM_TUPLE_ELEMENTS_FOR_SARSA = 6
-            padding_elements = [Sarsa(*([None] * NUM_TUPLE_ELEMENTS_FOR_SARSA))] * buffer_size
-            self._buffer = collections.deque(padding_elements, maxlen=buffer_size)
-            self._cur_buffer_size = buffer_size
+        self._buffer = collections.deque([], maxlen=buffer_size)
+
 
     @property
     def buffer_size(self):
@@ -40,20 +38,28 @@ class ExperienceReplayBuffer(object):
     def len(self):
         return self._cur_buffer_size
 
-    def push(self, sarsa):
+    def push(self, item):
         """Appends and element to the buffer
             Args:
-                sarsa: a Sarsa tuple
+                item: item to add of type 'buffer_type'
 
             Raises:
-                ValueError: invalid tuple type
+                ValueError: item is invalid type
         """
-        if not isinstance(sarsa, Sarsa):
-            raise ValueError("Must push in Sarsa NamedTuple not %s" % str(type(sarsa)))
+
+        if not isinstance(item, self._buffer_type):
+            raise ValueError("item must be of type %s, but argument is of type %s" %(self._buffer_type, type(item)))
+
+        # first element determines compatbility
+        if self._template_item is None:
+            self._template_item = item
+
+        if not self._are_compatible(self._template_item, item):
+            raise ValueError("item is not compatible other items in buffer")
 
         self._cur_buffer_size = self._cur_buffer_size + 1 if self._cur_buffer_size < self._buffer_size else self._cur_buffer_size
 
-        self._buffer.append(sarsa)
+        self._buffer.append(item)
 
     def random_sample(self, batch_size, sample_less=False):
         """Randomly samples a batch of Sarsa tuples

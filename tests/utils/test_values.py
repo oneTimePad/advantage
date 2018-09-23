@@ -1,6 +1,6 @@
 import unittest
 import os
-from utils.buffers import Sarsa
+from utils.sarsa import Sarsa
 from utils.values import apply_bellman_operator
 import numpy as np
 import tensorflow as tf
@@ -20,8 +20,8 @@ class MockNetwork:
 class TestValues(unittest.TestCase):
     """ Tests for special value functions """
     def setUp(self):
-        self.sarsa = [Sarsa(np.array([1]), np.array([2]), 1, 0, np.array([3]), None),
-                        Sarsa(np.array([1]), np.array([2]),  5, 1, np.array([3]), None)]
+        self.sarsa = [Sarsa(np.array([1.]), np.array([2.]), 1., 0., np.array([3.]), None),
+                        Sarsa(np.array([1.]), np.array([2.]),  5., 1., np.array([3.]), None)]
         self.network = MockNetwork()
         """
         self.graph = tf.Graph()
@@ -38,8 +38,10 @@ class TestValues(unittest.TestCase):
             with self.session.as_default():
                 self.session.run(self.init)
         """
-        _, _, values = apply_bellman_operator(tf.Session(), self.network, self.sarsa, 0.01, "test")
+        sarsa_split = Sarsa.split_list_to_np(self.sarsa)
 
-        np.testing.assert_array_equal(values, np.array([1 + 0.01 * 3,  5.]))
+        _, _, values = apply_bellman_operator(tf.Session(), self.network, sarsa_split, 0.01, "test")
+
+        np.testing.assert_array_equal(values, np.array([[1 + 0.01 * 3],  [5.]]))
 
 unittest.main()

@@ -2,12 +2,12 @@ import gym
 import numpy as np
 from abc import ABCMeta
 from abc import abstractmethod
-from utils.buffers import Sarsa
+from utils.sarsa import Sarsa
 
 
 class LearningAgent(object):
     __metaclass__ = ABCMeta
-    """ Represents the general Learning Reinforcement Learning
+    """ Represents the general Learning (model-free) Reinforcement Learning
     agent. An agent has an environment in which it acts in
     and a policy which it follows. The reward observed
     is then used to modify the policy.
@@ -102,14 +102,22 @@ class LearningAgent(object):
         """
         if self._done:
             self._state = self._environment.reset()
-        conditional_policy = self.evaluate_policy(self._state)
+            self._state = self._state.astype(np.float32) if isinstance(self._state, np.ndarray) else float(self._state)
+
+        prev_state = self._state
+        conditional_policy = self.evaluate_policy(prev_state)
         a = self.sample_action(conditional_policy, training)
         self._state, reward, self._done, _ = self._environment.step(a)
         self._steps += 1
         self._total_reward += reward
-        return Sarsa(state=self._state, action=a,
+
+        a = a.astype(np.float32) if isinstance(a, np.ndarray) else float(a)
+        reward = reward.astype(np.float32) if isinstance(reward, np.ndarray) else float(reward)
+        self._state = self._state.astype(np.float32) if isinstance(self._state, np.ndarray) else float(self._state)
+
+        return Sarsa.make(state=prev_state, action=a,
                     reward=reward, done=self._done,
-                    next_state=self._state, next_action=None)
+                    next_state=self._state)
 
     def act_for_steps(self, num_steps, training):
         """ Generator: Agent acts in environment for num_steps
