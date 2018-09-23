@@ -1,1 +1,1 @@
-from .approximate_agents import *
+from .deep_q_agent import DeepQAgent

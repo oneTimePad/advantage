@@ -5,7 +5,7 @@ import tensorflow as tf
 from builders.agents_builder import build
 from utils.proto_parser import parse_obj_from_file
 from protos.agents import agents_pb2
-from agents.approximate_agents import DeepQAgent
+from agents.deep_q_agent import DeepQAgent
 from utils.sarsa import Sarsa
 
 __location__ = os.path.realpath(

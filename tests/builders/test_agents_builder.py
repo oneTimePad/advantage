@@ -6,7 +6,7 @@ import tensorflow as tf
 from builders.agents_builder import build
 from utils.proto_parser import parse_obj_from_file
 from protos.agents import agents_pb2
-from agents.approximate_agents import DeepQAgent
+from agents.deep_q_agent import DeepQAgent
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__)))
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
