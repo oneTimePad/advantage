@@ -1,0 +1,11 @@
+syntax = "proto2";
+
+package protos;
+
+
+
+message Sarsa {
+    optional bool normalizeState = 1; [default=true];
+    optional bool normalizeAction = 2; [default=true];
+    optional bool normalizeReward = 3; [default=true];
+}
