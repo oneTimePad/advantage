@@ -11,7 +11,11 @@ python3 tests/approximators/test_deep_dense.py
 python3 tests/builders/test_agents_builder.py
 python3 tests/builders/test_approximators_builder.py
 
+#buffers
+python3 tests/buffers/test_experience_replay_buffer.py
+
+#elements
+python3 tests/elements/test_sarsa.py
+
 #utils
-python3 tests/utils/test_sarsa.py
-python3 tests/utils/test_buffers.py
 python3 tests/utils/test_values.py

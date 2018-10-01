@@ -63,9 +63,10 @@ class DeepQAgent(ApproximateAgent, DiscreteActionSpaceAgent, ActionValueAgent):
     def evaluate_policy(self, state):
         return self._policy.inference(self._session, {"policy_state_plh" : [state]})
 
-    def improve_policy(self, sarsa_samples):
-        """Policy is improved by copying target params to policy network"""
-        target_params = self._target.trainable_parameters_dict\
+    def improve_policy(self):
+        """Policy is improved by copying target params to policy network
+        """
+        target_params = self._target.trainable_parameters_dict
 
         #with self._session.as_default():
         target_params_runtime = self._session.run(target_params)
@@ -73,12 +74,13 @@ class DeepQAgent(ApproximateAgent, DiscreteActionSpaceAgent, ActionValueAgent):
         target_params_runtime = {self._policy.strip_and_replace_scope(k) : v for k,v in target_params_runtime.items()}
         self._policy.copy(self._session, target_params_runtime)
 
-    def improve_target(self, sarsa_samples):
+    def improve_target(self, sarsa):
         """ Trains the Target Q-Network on I.I.D samples batch from the Replay Buffer
                 Args:
-                    sarsa_samples: list of Sarsa samples
+                    Sarsa: object containing aggregated results
         """
-        states, actions_taken, targets = apply_bellman_operator(self._session, self._policy, sarsa_samples, self._discount_factor, "policy_state_plh")
+
+        states, actions_taken, targets = apply_bellman_operator(self._session, self._policy, sarsa, self._discount_factor, "policy_state_plh")
 
         feed_dict_in = {"tgt_state_plh" : states}
 

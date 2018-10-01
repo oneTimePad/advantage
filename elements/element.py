@@ -191,16 +191,23 @@ class Element(object, metaclass=ABCMeta):
         """ Wrap attr in Element """
         return attr.s(fn, frozen=True)
 
-    def unzip(self):
+    def unzip_to_tuple(self):
         """ Puts attributes to tuple """
         return tuple((getattr(self, attribute.name) for attribute in self.__attrs_attrs__))
+
+    def unzip_to_dict(self):
+        return {attribute.name: getattr(self, attribute.name) for attribute in self.__attrs_attrs__}
+
+
+    def deep_copy(self):
+        return self.make_element_from_dict(self.unzip_to_dict())
 
     @classmethod
     def make_element_from_dict(cls, dictionary):
         return cls.make_element(**dictionary)
 
     @abstractmethod
-    def make_element_zero(cls,**kwargs):
+    def make_element_zero(cls, **kwargs):
         """ Factory: Instantiates a 'zeroed' out Element
                 **kwargs:
                     arguments specifying extra info

@@ -2,7 +2,7 @@ import gym
 import numpy as np
 from abc import ABCMeta
 from abc import abstractmethod
-from utils.sarsa import Sarsa
+
 
 
 class LearningAgent(object):
@@ -84,11 +84,11 @@ class LearningAgent(object):
 
 
     @abstractmethod
-    def improve_policy(self, sarsa_samples):
+    def improve_policy(self, samples):
         """ Improves the current policy based on Information
         observed from evaluation.
             Args:
-                sarsa_samples: samples to improve using
+                samples: samples to improve using
         """
         raise NotImplementedError()
 
@@ -97,12 +97,14 @@ class LearningAgent(object):
             Args:
                 training: whether the agent is training
 
-            Return:
-                sarsa element
+            Returns:
+                dict containing one-step state infor
+                {'state':, 'action':, 'reward':, 'done':, 'next_state':}
+                values are in whatever format the environment and agent return
         """
         if self._done:
             self._state = self._environment.reset()
-            self._state = self._state.astype(np.float32) if isinstance(self._state, np.ndarray) else float(self._state)
+            #self._state = self._state.astype(np.float32) if isinstance(self._state, np.ndarray) else float(self._state)
 
         prev_state = self._state
         conditional_policy = self.evaluate_policy(prev_state)
@@ -111,13 +113,11 @@ class LearningAgent(object):
         self._steps += 1
         self._total_reward += reward
 
-        a = a.astype(np.float32) if isinstance(a, np.ndarray) else float(a)
-        reward = reward.astype(np.float32) if isinstance(reward, np.ndarray) else float(reward)
-        self._state = self._state.astype(np.float32) if isinstance(self._state, np.ndarray) else float(self._state)
+        #a = a.astype(np.float32) if isinstance(a, np.ndarray) else float(a)
+        #reward = reward.astype(np.float32) if isinstance(reward, np.ndarray) else float(reward)
+        #self._state = self._state.astype(np.float32) if isinstance(self._state, np.ndarray) else float(self._state)
 
-        return Sarsa.make(state=prev_state, action=a,
-                    reward=reward, done=self._done,
-                    next_state=self._state)
+        return {"state": prev_state, "action": a, "reward": reward, "done": self._done, "next_state": self._state}
 
     def act_for_steps(self, num_steps, training):
         """ Generator: Agent acts in environment for num_steps

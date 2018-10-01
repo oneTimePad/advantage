@@ -19,13 +19,6 @@ def get_env_state_shape(environment):
     return [None] + list(state_shape)
 
 
-def function_attr(fn, **kwargs):
-    """Add a set of keyword attrs to a function"""
-    for k, v  in kwargs.items():
-        setattr(f, k, v)
-    return fn
-
-
 class AgentBuilders:
 
     @staticmethod
@@ -62,13 +55,13 @@ def build(agents_config, graph, environment):
     """ Builds an Agent based on configuration
             Args:
                 agents_config: configuration from protobuf for agent
-                environment: OpenAi Gym Gym object
+                environment: OpenAI Gym Gym object
 
             Returns:
                 an Agent object
     """
     if not isinstance(agents_config, agents_pb2.Agents):
-        raise ValueError("agents_config not of type agents_pb2.Approximator")
+        raise ValueError("agents_config not of type agents_pb2.Agents")
 
     agent_name_lower = agents_config.WhichOneof("agent")
     agent_name = agent_name_lower[0].capitalize() + agent_name_lower[1:]
