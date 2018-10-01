@@ -40,6 +40,28 @@ class Sarsa(Element, NumpyElementMixin, NormalizingElementMixin):
                     next_action=next_action)
 
     @classmethod
+    def make_element_from_env(cls, env_dict):
+        """Makes a Sarsa element from env_dict returned by LearningAgent
+                Args:
+                    env_dict: dict returned by LearningAgent act_in_env using an Environment
+
+                Returns:
+                    Sarsa
+        """
+        state = env_dict["state"].astype(np.float32) if isinstance(env_dict["state"], np.ndarray) else np.array([env_dict["state"]], dtype=np.float32)
+        action = env_dict["action"].astype(np.floa32) if isinstance(env_dict["action"], np.ndarray) else np.array([env_dict["action"]], dtype=np.float32)
+        reward = env_dict["reward"].astype(np.float32) if isinstance(env_dict["reward"], np.ndarray) else np.array([env_dict["reward"]], dtype=np.float32)
+        done = np.array([env_dict["done"]], dtype=np.bool)
+        next_state = env_dict["next_state"].astype(np.float32) if isinstance(env_dict["next_state"], np.ndarray) else np.array([env_dict["next_state"]], dtype=np.float32)
+
+        return cls.make_element(state=state,
+                                    action=action,
+                                    reward=reward,
+                                    done=done,
+                                    next_state=next_state)
+
+
+    @classmethod
     def make_element_zero(cls, state_col_dim,
                     action_col_dim,
                     reward_col_dim,
