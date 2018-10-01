@@ -1,5 +1,6 @@
 import collections
 
+# TODO maybe make an Interface for buffers?
 class ExperienceReplayBuffer(object):
     """Allows for collecting various SARSA(usually but not required) tuples taken by an agent.
     This buffer is commonly used in many approximate RL algorithms to
