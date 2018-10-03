@@ -7,3 +7,5 @@ protos/models/__pycache__/
 protos/models/*_pb2.py
 protos/*_pb2.py
 protos/__pycache__/
+protos/elements/*_pb2.py
+protos/elements/__pycache__

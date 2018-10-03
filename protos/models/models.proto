@@ -1,3 +1,24 @@
 syntax = "proto2";
 
 package protos;
+
+import "protos/agents/agents.proto";
+import "protos/models/deep_q_model.proto";
+
+message Models {
+
+    oneof model {
+        DeepQModel deepQModel = 1;
+    }
+
+    required Agents agent = 2;
+
+    required int64 steps_to_run_for = 3;
+
+    required int64 improve_policy_modulo = 4;
+    required int64 steps_for_act_iter = 5;
+
+
+
+
+}
