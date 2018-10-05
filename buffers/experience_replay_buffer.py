@@ -1,4 +1,5 @@
 import collections
+import random
 
 # TODO maybe make an Interface for buffers?
 class ExperienceReplayBuffer(object):
