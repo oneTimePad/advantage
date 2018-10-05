@@ -1,6 +1,6 @@
 from protos.buffers import buffers_pb2
-import utils.buffers as buffers
-
+from functools import partial
+import buffers
 
 class BufferBuilders:
 
@@ -34,7 +34,7 @@ def build(buffers_config):
         raise ValueError("Buffer %s in configuration does not exist" % buffer_name)
 
     buffer_obj = partial(buffer_obj,
-                        buffers_config.bufferType,
                         buffers_config.bufferSize)
 
-    return buffer_builder(buffer_obj, buffers_config)
+    return buffer_builder(buffer_obj,
+                          getattr(buffers_config, buffer_name_lower))
