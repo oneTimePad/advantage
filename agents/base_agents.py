@@ -109,7 +109,7 @@ class LearningAgent(object):
         prev_state = self._state
         conditional_policy = self.evaluate_policy(prev_state)
         a = self.sample_action(conditional_policy, training)
-        self._state, reward, self._done, _ = self._environment.step(a)
+        self._state, reward, self._done = self._environment.step(a)
         self._steps += 1
         self._total_reward += reward
 
