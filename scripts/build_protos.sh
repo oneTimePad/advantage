@@ -4,3 +4,4 @@ protoc  protos/models/* --python_out=.
 protoc  protos/configuration.proto --python_out=.
 protoc  protos/environments.proto --python_out=.
 protoc  protos/elements/* --python_out=.
+protoc  protos/buffers/* --python_out=.
