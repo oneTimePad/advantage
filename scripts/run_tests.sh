@@ -19,3 +19,6 @@ python3 tests/elements/test_sarsa.py
 
 #utils
 python3 tests/utils/test_values.py
+
+#models
+python3 tests/models/test_dqn_model.py

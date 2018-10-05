@@ -1,0 +1,20 @@
+syntax = "proto2";
+
+package protos;
+
+import "protos/buffers/buffers.proto";
+import "protos/elements/sarsa.proto";
+
+message DeepQModel {
+
+    required Buffers buffer = 3;
+
+    required Sarsa sarsa = 4;
+
+    required int64 improve_target_modulo = 5;
+    required int64 iterations_of_improvement = 6;
+
+    required int64 batch_size = 7;
+
+    required bool train_sample_less = 8 [default=false];
+}

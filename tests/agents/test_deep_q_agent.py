@@ -8,6 +8,7 @@ from utils.proto_parser import parse_obj_from_file
 from protos.agents import agents_pb2
 from agents.deep_q_agent import DeepQAgent
 from elements.sarsa import Sarsa
+from environments.gym_environment import GymEnvironment
 
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__)))
@@ -20,7 +21,7 @@ class TestDeepQAgent(unittest.TestCase):
     def setUp(self):
         DQN_CONFIG = os.path.join(__location__,  "../mock_configs/deep_q_agent.config")
         graph = tf.Graph()
-        environment = gym.make("CartPole-v0")
+        environment = GymEnvironment("CartPole-v0")
 
         agents_config = parse_obj_from_file(DQN_CONFIG, agents_pb2.Agents)
 
