@@ -1,8 +1,6 @@
 syntax = "proto2";
 
-package protos;
-
-
+package advantage.protos;
 
 message Sarsa {
     optional bool normalizeState = 1 [default=true];

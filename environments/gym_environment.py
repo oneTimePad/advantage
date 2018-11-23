@@ -1,6 +1,6 @@
 import gym
 import numpy as np
-from .environment import Environment
+from advantage.environments.environment import Environment
 
 class GymEnvironment(Environment):
     """ Integrates the OpenAI Gym Environments

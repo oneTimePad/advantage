@@ -1,1 +1,1 @@
-from .deep_q_model import DeepQModel
+from advantage.models.deep_q_model import DeepQModel

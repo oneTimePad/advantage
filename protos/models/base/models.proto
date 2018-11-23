@@ -1,0 +1,28 @@
+syntax = "proto2";
+
+package advantage.protos;
+
+import "advantage/protos/agents/base/agents.proto";
+import "advantage/protos/models/deep_q_model.proto";
+
+message Models {
+
+    oneof model {
+        DeepQModel deepQModel = 1;
+    }
+
+    required Agents agent = 2;
+
+    required int64 steps_to_run_for = 3;
+
+    required int64 improve_policy_modulo = 4;
+    required int64 steps_for_act_iter = 5;
+
+    required string name_scope = 6;
+
+    optional bool reuse = 7 [default = false];
+
+
+
+
+}

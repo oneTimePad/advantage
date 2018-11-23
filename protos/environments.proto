@@ -1,3 +1,20 @@
 syntax = "proto2";
 
-package protos;
+package advantage.protos;
+
+message GymEnvironment {
+    required string name = 1;
+}
+
+message CustomEnvironment {
+
+}
+
+message Environments {
+
+    oneof environment {
+        GymEnvironment gymEnvironment = 1;
+        CustomEnvironment CustomEnvironment = 2;
+    }
+
+}

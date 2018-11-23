@@ -1,9 +1,9 @@
 syntax = "proto2";
 
 
-package protos;
+package advantage.protos;
 
-import "protos/buffers/experience_replay_buffer.proto";
+import "advantage/protos/buffers/experience_replay_buffer.proto";
 
 
 message Buffers {

@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from elements.sarsa import Sarsa
+from advantage.elements import Sarsa
 
 """ Computes various RL special values """
 

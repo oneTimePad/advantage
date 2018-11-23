@@ -1,9 +1,9 @@
 syntax = "proto2";
 
-package protos;
+package advantage.protos;
 
-import "protos/buffers/buffers.proto";
-import "protos/elements/sarsa.proto";
+import "advantage/protos/buffers/buffers.proto";
+import "advantage/protos/elements/sarsa.proto";
 
 message DeepQModel {
 

@@ -49,6 +49,18 @@ class Environment(object, metaclass=ABCMeta):
         """ Returns the ActionSpace object of the environment """
         raise NotImplementedError()
 
+    @property
+    def tf_state_shape(self):
+        """Fetch env shape as list
+            Args:
+                environment: Environment or GymEnv
+
+            Returns:
+                shape as list for placeholder
+        """
+        state_shape = self.reset().shape
+
+        return [None] + list(state_shape)
 
 class ActionSpace(object, metaclass=ABCMeta):
     """ Defines the action space of the Environment """

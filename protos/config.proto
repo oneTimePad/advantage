@@ -1,0 +1,22 @@
+syntax = "proto2";
+
+package advantage.protos;
+
+import "advantage/protos/models/base/models.proto";
+import "advantage/protos/environments.proto";
+
+message Config {
+
+    required Models model = 1;
+    required Environments environment = 2;
+
+    required int64 checkpoint_freq_sec = 3;
+
+    required string checkpoint_dir_path = 4;
+    required string checkpoint_file_prefix = 5;
+
+    required int64 run_for_steps = 6;
+
+
+
+}

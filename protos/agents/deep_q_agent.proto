@@ -1,9 +1,8 @@
 syntax = "proto2";
 
-package protos;
+package advantage.protos;
 
-
-import "protos/approximators/approximators.proto";
+import "advantage/protos/approximators/base/approximators.proto";
 
 message DeepQAgent {
 

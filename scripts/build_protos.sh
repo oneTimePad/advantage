@@ -1,7 +1,10 @@
-protoc  protos/approximators/* --python_out=.
-protoc  protos/agents/* --python_out=.
-protoc  protos/models/* --python_out=.
-protoc  protos/configuration.proto --python_out=.
-protoc  protos/environments.proto --python_out=.
-protoc  protos/elements/* --python_out=.
-protoc  protos/buffers/* --python_out=.
+protoc  advantage/protos/approximators/base/*.proto --python_out=.
+protoc  advantage/protos/approximators/*.proto --python_out=.
+protoc  advantage/protos/agents/*.proto --python_out=.
+protoc  advantage/protos/agents/base/*.proto --python_out=.
+protoc  advantage/protos/models/*.proto --python_out=.
+protoc  advantage/protos/models/base/*.proto --python_out=.
+protoc  advantage/protos/config.proto --python_out=.
+protoc  advantage/protos/environments.proto --python_out=.
+protoc  advantage/protos/elements/*.proto --python_out=.
+protoc  advantage/protos/buffers/*.proto --python_out=.
