@@ -1,0 +1,15 @@
+syntax = "proto2";
+
+
+package advantage.protos;
+
+import "advantage/protos/buffers/experience_replay_buffer.proto";
+
+
+message Buffers {
+    oneof buffer {
+        ExperienceReplayBuffer experienceReplayBuffer = 1;
+    }
+
+    required int32 bufferSize = 2;
+}

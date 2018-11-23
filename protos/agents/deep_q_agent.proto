@@ -1,0 +1,14 @@
+syntax = "proto2";
+
+package advantage.protos;
+
+import "advantage/protos/approximators/base/approximators.proto";
+
+message DeepQAgent {
+
+    required Approximators tgt_network = 1;
+    required Approximators policy = 2;
+
+    required float epsilon = 3;
+
+}

@@ -1,4 +1,4 @@
-from .environment import Environment
+from environments.environment import Environment
 
 class MockEnvironment(Environment):
     """ Mocks a Random MDP with a deterministic one
