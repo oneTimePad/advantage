@@ -178,7 +178,7 @@ def _deep_approximator(cls):
             """
 
             if  not isinstance(inputs_placeholders, list):
-                raise ValueError("Expects inputs_placeholders as list")
+                raise ValueError("Expects `inputs_placeholders` as list")
 
             self._inputs_placeholders = inputs_placeholders
 
@@ -238,28 +238,32 @@ def _deep_approximator(cls):
 
             self._update_target_placeholders.append(placeholder)
 
-        def copy(self, session, runtime_params):
+        def make_copy_op(self, session, network):
             """Runs operations to copy runtime values to this models params
                 Args:
                     session: tf.Session object
-                    runtime_params: dict with full param names as keys and runtime values as values
+                    network: approximator to copy from
                 Raises:
                     ValueError: for wrong args
             """
             if not isinstance(session, tf.Session):
                 raise ValueError("Must pass in tf.Session")
-            if not isinstance(runtime_params, dict):
-                raise ValueError("runtime_params must a be dict with param names and values")
 
             ops = [v[1] for v in self._copy_ops.values()]
 
-            replaced_scope = {strip_and_replace_scope(self.name_scope, k) :
-                              v for k, v in runtime_params.items()}
+
+            suffix_start = len(self.name_scope.split("/"))
+
+            network_params = network.trainable_parameters_dict
+
+            network_params_runtime = session.run(network_params)
+
+            replaced_scope = {strip_and_replace_scope(self.name_scope, k, suffix_start) :
+                              v for k, v in network_params_runtime.items()}
 
             feed_dict = {v[0] : replaced_scope[k] for k, v in self._copy_ops.items()}
 
-            with self._approximator_scope():
-                session.run(ops, feed_dict=feed_dict)
+            return lambda: session.run(ops, feed_dict=feed_dict)
 
 
         def initialize(self, session):
@@ -317,8 +321,7 @@ def _deep_approximator(cls):
             runtime_batch.update(self._produce_input_feed_dict(runtime_inputs))
             runtime_batch.update(self._produce_target_feed_dict(runtime_targets))
 
-            with self._approximator_scope():
-                session.run(self._train_op, feed_dict=runtime_batch)
+            session.run(self._train_op, feed_dict=runtime_batch)
 
         def inference(self, session, runtime_tensor_inputs):
             """ Performs inference on runtime_tensor_inputs
@@ -338,8 +341,7 @@ def _deep_approximator(cls):
 
             feed_dict = self._produce_input_feed_dict(runtime_tensor_inputs)
 
-            with self._approximator_scope():
-                return session.run(self._network, feed_dict=feed_dict)
+            return session.run(self._network, feed_dict=feed_dict)
 
     return _DeepApproximator
 
