@@ -13,8 +13,6 @@ message Models {
 
     required Agents agent = 2;
 
-    required int64 steps_to_run_for = 3;
-
     required int64 improve_policy_modulo = 4;
     required int64 steps_for_act_iter = 5;
 

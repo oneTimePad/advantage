@@ -18,6 +18,7 @@ class Train:
                  checkpoint_dir_path,
                  checkpoint_file_prefix,
                  checkpoint_freq_sec,
+                 config,
                  hooks,
                  stopper):
         self._training_manager = TrainingManager(model,
@@ -25,6 +26,7 @@ class Train:
                                                  checkpoint_dir_path,
                                                  checkpoint_file_prefix,
                                                  checkpoint_freq_sec,
+                                                 config,
                                                  hooks,
                                                  stopper)
     def __enter__(self):
@@ -38,11 +40,11 @@ class Train:
         """
         if exception_type:
             if isinstance(exception_type, KeyboardInterrupt):
-                print("Training ended by user")
+                tf.logging.warn("Training ended by user")
             else:
-                print("Found Exception %s" % exception_type)
-                print("Exception value %s" % exception_value)
-                print("We will still try to save the model!")
+                tf.logging.error("Found Exception %s" % exception_type)
+                tf.logging.error("Exception value %s" % exception_value)
+                tf.logging.warn("We will still try to save the model!")
         else:
             print("Training has completed.")
 
@@ -51,14 +53,14 @@ class Train:
         # if an `unknown` exception occurs, we can't continue
         # hence `fatal_exception`
         try:
-            print("Starting shutdown proceedures")
+            tf.logging.warn("Starting shutdown proceedures")
             self._training_manager.shutdown()
-            print("Shutdown has complete")
+            tf.logging.info("Shutdown has complete")
         except Exception as fatal_exception:
             # something terribly wrong
-            print("Failed to shutdown properly!.")
-            print("Received fatal exception while attempting to shutdown!")
-            print("Shutdown procedure can't continue!")
+            tf.logging.fatal("Failed to shutdown properly!.")
+            tf.logging.fatal("Received fatal exception while attempting to shutdown!")
+            tf.logging.fatal("Shutdown procedure can't continue!")
             raise fatal_exception
 
     @classmethod
@@ -80,6 +82,7 @@ class Train:
                    config.checkpoint_dir_path,
                    config.checkpoint_file_prefix,
                    config.checkpoint_freq_sec,
+                   config,
                    parse_hooks(None),
                    stopper)
 
@@ -93,6 +96,7 @@ class TrainingManager:
                  checkpoint_dir_path,
                  checkpoint_file_prefix,
                  checkpoint_freq_sec,
+                 config,
                  hooks,
                  stopper):
         """
@@ -111,6 +115,8 @@ class TrainingManager:
         self._model.checkpoint_freq_sec = checkpoint_freq_sec
 
         self._run_for_steps = run_for_steps
+
+        self._config = config
 
         self._before_train_hooks = TrainHookRunTime.filter_before_train(hooks)
         self._during_train_hooks = TrainHookRunTime.filter_during_train(hooks)
@@ -131,10 +137,8 @@ class TrainingManager:
         """ Peforms any necessary shutdown procedures
         """
         try:
-            tf.logging.warn("Saving model to checkpoint. Please wait...")
             self._model.stop_checkpoint_system() # stop checkpointing
             self._model.clean()
-            tf.logging.warn("Model has been successfully saved to checkpoint.")
         except AttributeError:
             tf.logging.error("Checkpoint couldn't be saved. This is"
                              " because the model class isn't decorated with `checkpointable`")
@@ -162,17 +166,35 @@ class TrainingManager:
                              " Checkpointing System wasn't setup properly!")
             raise Exception("Failed to start checkpoint system")
         stopper = self._stopper
+
+        tf.logging.set_verbosity(tf.logging.INFO)
+
+        log_steps_times = self._run_for_steps / self._config.info_log_frequency
+        alpha = self._config.average_smoothing
+        smoothed_reward = 0
+
         while self._model.steps < self._run_for_steps and not stopper.should_stop:
+            with self._model.checkpoint_lock:
+                info_dict = self._model.act_iteration()
 
-            info_dict = self._model.act_iteration()
-            total_steps_after = self._model.steps
-            tf.logging.info("Model completed a total of %d steps.", total_steps_after)
+                if "traj_reward" in info_dict:
+                    reward = info_dict["traj_reward"]
 
-            tf.logging.info("Proceeding with training iteration.")
-            self._model.train_iteration(info_dict)
-            tf.logging.info("Training iteration completed.")
+                    alpha = alpha if smoothed_reward else float(0)
 
-            TrainHook.run_hooks(self._during_train_hooks)
+                    smoothed_reward = alpha * smoothed_reward + (1. - alpha) * reward
+
+                    tf.logging.log_every_n(tf.logging.INFO,
+                                           "Running Average Reward %.2f" % smoothed_reward,
+                                           log_steps_times)
+
+                tf.logging.log_every_n(tf.logging.INFO,
+                                       "Model completed a total of %d steps." % self._model.steps,
+                                       log_steps_times)
+
+                self._model.train_iteration(info_dict)
+
+                TrainHook.run_hooks(self._during_train_hooks)
 
         TrainHook.run_hooks(self._after_train_hooks)
 

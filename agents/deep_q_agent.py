@@ -28,6 +28,7 @@ class DeepQAgent(ApproximateAgent, DiscreteActionSpaceAgent, ActionValueAgent):
 
         self._target = target_q_network
         self._epsilon = epsilon
+        self._copy = None
 
         super().__init__(policy=policy_q_network,
                          environment=environment,
@@ -71,6 +72,11 @@ class DeepQAgent(ApproximateAgent, DiscreteActionSpaceAgent, ActionValueAgent):
         self._policy.initialize(self.session)
         self._target.initialize(self.session)
 
+        self._copy = self._policy.make_copy_op(self.session,
+                                               self._target)
+
+
+
     def set_up(self):
         self._policy.initialize(self.session)
 
@@ -82,11 +88,7 @@ class DeepQAgent(ApproximateAgent, DiscreteActionSpaceAgent, ActionValueAgent):
     def improve_policy(self):
         """Policy is improved by copying target params to policy network
         """
-        target_params = self._target.trainable_parameters_dict
-
-        target_params_runtime = self.session.run(target_params)
-
-        self._policy.copy(self.session, target_params_runtime)
+        self._copy()
 
     def improve_target(self, sarsa):
         """ Trains the Target Q-Network on I.I.D samples batch from the Replay Buffer

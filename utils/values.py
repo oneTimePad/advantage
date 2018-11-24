@@ -2,7 +2,8 @@ import tensorflow as tf
 import numpy as np
 from advantage.elements import Sarsa
 
-""" Computes various RL special values """
+""" Computes various RL special values
+"""
 
 
 
@@ -27,13 +28,7 @@ def apply_bellman_operator(session, policy, sarsa, gamma, state_plh_name):
     if not isinstance(session, tf.Session):
         raise ValueError("Must pass in a tf.Session object")
 
-    if not isinstance(sarsa, Sarsa):
-        raise ValueError("sarsa_split must be a tuple of np.ndarrays")
-
     states, actions, rewards, dones, next_states, next_actions = sarsa.unzip_to_tuple()
-
-    if state_plh_name not in policy.feed_dict_keys:
-        raise ValueError("%s is not in network feed_dict_keys" % state_plh_name)
 
     q_values = policy.inference(session, {state_plh_name: next_states})
 

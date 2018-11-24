@@ -2,6 +2,7 @@ from functools import reduce
 from contextlib import ExitStack
 import tensorflow as tf
 import os
+import itertools
 
 """ TensorFlow related utils
 """
@@ -23,21 +24,22 @@ def build_init_uninit_op(session, variables):
     return tf.variables_initializer(not_initialized_vars) if not_initialized_vars else None
 
 
-def strip_and_replace_scope(var_scope, variable_name):
+def strip_and_replace_scope(name_scope, variable, suffix_start):
     """ Strip highest scope of  and replace with self's var_scope.name as
     new highest scope.
             Args:
-                var_scope: new upper scope
-                variable_name: the fully-qualified variable name
+                name_scope: new upper scope
+                variable: variable string name
+                suffix_start: start of suffix to keep
 
             Returns:
                 new fully-qualified variable name
     """
-    # pylint: disable=W0108
-    # reason-disabled: lambda used by reduce
-    return os.path.join(var_scope.name,
-                        reduce(lambda x, y: os.path.join(x, y),
-                               variable_name.split("/")[1:]))
+    combine = lambda l: reduce(lambda x, y: os.path.join(x, y), l)
+
+    suffix = combine(variable.split("/")[suffix_start:])
+
+    return combine([name_scope, suffix])
 
 class ScopeWrap:
     """ Wraps the graph.as_default
@@ -60,6 +62,7 @@ class ScopeWrap:
         if not self._scope:
             self._scope = ctx.enter_context(tf.variable_scope(self._name,
                                                               reuse=self._reuse))
+
         else:
             ctx.enter_context(tf.variable_scope(self._scope, auxiliary_name_scope=False))
             ctx.enter_context(tf.name_scope(self._scope.original_name_scope))
@@ -70,10 +73,6 @@ class ScopeWrap:
     def name_scope(self):
         """ Returns name_scope
         """
-
-        if self._scope:
-            return self._scope.original_name_scope
-
         return self._name
 
     @property

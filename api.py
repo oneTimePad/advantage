@@ -110,14 +110,7 @@ class Agent:
         """
         self._config.checkpoint_dir_path = dir_path
 
-    @property
-    def env(self):
-        """ property for env
-        """
-        return self._env
-
-    @env.setter
-    def env(self, environment):
+    def attach_env(self, environment):
         """ Attaches an `Environment`
         to this agent at runtime. This allows the
         agent to utilizes different
