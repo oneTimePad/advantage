@@ -53,7 +53,7 @@ class DeepQModel(LearningModel):
     def steps(self):
         """ Returns the number of steps the DQNAgent takes
         """
-        return self._agent.steps
+        return self._agent.total_steps
 
     def set_up_train(self):
         dims = self._environment.dims
@@ -79,16 +79,25 @@ class DeepQModel(LearningModel):
         self._agent.set_up()
 
     def act_iteration(self):
-        """ Runs the agent and collects Sarsas to put in the replay buffer """
-        steps = 0
-        for steps, env_dict in self._agent.act_for_steps(self._steps_for_act_iter, training=True):
+        """ Runs the agent and collects Sarsas to put in the replay buffer
+        """
+
+        traj_rewards = []
+        env_dict = {"done" : True}
+        for _, env_dict in self._agent.act_for_steps(self._steps_for_act_iter, training=True):
             sarsa = Sarsa.make_element_from_env(env_dict)
 
             Sarsa.update_normalize_stats(self._norm_stats, sarsa)
 
             self._replay_buffer.push(sarsa)
 
-        return {"steps" : self.steps, "traj_reward" : steps}
+            if env_dict["done"]:
+                traj_rewards.append(self._agent.traj_reward)
+
+        if not env_dict["done"]:
+            traj_rewards.append(self._agent.traj_reward)
+
+        return {"steps" : self.steps, "traj_rewards" : traj_rewards}
 
     def train_iteration(self, info_dict):
         """ Determines whether to update policy or target based on step count """

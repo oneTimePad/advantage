@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod
+from functools import reduce
 import tensorflow as tf
 from advantage.checkpoint import CheckpointError
 from advantage.utils.proto_parsers import parse_hooks
@@ -175,16 +176,18 @@ class TrainingManager:
 
         tf.summary.FileWriter(self._model.checkpoint_dir_path, self._model.graph)
 
+        smooth = lambda factor: lambda cur, new, f=factor: f * cur + (1. - f) * new
+
         while self._model.steps < self._run_for_steps and not stopper.should_stop:
             with self._model.checkpoint_lock:
                 info_dict = self._model.act_iteration()
 
-                if "traj_reward" in info_dict:
-                    reward = info_dict["traj_reward"]
+                if "traj_rewards" in info_dict:
+                    rewards = info_dict["traj_rewards"]
+                    if rewards:
+                        alpha = alpha if smoothed_reward else float(0)
 
-                    alpha = alpha if smoothed_reward else float(0)
-
-                    smoothed_reward = alpha * smoothed_reward + (1. - alpha) * reward
+                        smoothed_reward = reduce(smooth(alpha), rewards)
 
                     tf.logging.log_every_n(tf.logging.INFO,
                                            "Running Average Reward %.2f" % smoothed_reward,

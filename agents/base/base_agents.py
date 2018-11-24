@@ -20,8 +20,10 @@ class LearningAgent(metaclass=ABCMeta):
         self._environment = environment
         self._done = True
         self._state = None
-        self._steps = 0 # total number of steps gone
-        self._total_reward = 0
+        self._total_steps = 0 # total number of steps gone
+        self._traj_steps = 0 # current steps for trajectory
+        self._traj_reward = 0 # current trajectory reward
+        self._dis_traj_reward = 0 # current discounted trajectory reward
         self._discount_factor = discount_factor
 
     @property
@@ -31,16 +33,28 @@ class LearningAgent(metaclass=ABCMeta):
         return self._discount_factor
 
     @property
-    def total_reward(self):
-        """ _total_reward property
+    def traj_reward(self):
+        """ _traj_reward property
         """
-        return self._total_reward
+        return self._traj_reward
 
     @property
-    def steps(self):
-        """ _steps property
+    def dis_traj_reward(self):
+        """ _dis_traj_reward property
         """
-        return self._steps
+        return self._dis_traj_reward
+
+    @property
+    def traj_steps(self):
+        """ _traj_steps property
+        """
+        return self._traj_steps
+
+    @property
+    def total_steps(self):
+        """ _total_steps property
+        """
+        return self._total_steps
 
     @property
     def policy(self):
@@ -121,15 +135,23 @@ class LearningAgent(metaclass=ABCMeta):
                 {'state':, 'action':, 'reward':, 'done':, 'next_state':}
                 values are in whatever format the environment and agent return
         """
+        was_done = False
         if self._done:
+            was_done = True
             self._state = self._environment.reset()
+            self._dis_traj_reward = 0.
+            self._traj_reward = 0.
+            self._traj_steps = 0
 
         prev_state = self._state
         conditional_policy = self.evaluate_policy(prev_state)
         action = self.sample_action(conditional_policy, training)
         self._state, reward, self._done = self._environment.step(action)
-        self._steps += 1
-        self._total_reward += reward
+        self._total_steps += 1
+        self._traj_steps += 1
+
+        self._dis_traj_reward += (self._discount_factor) * reward if not was_done else reward
+        self._traj_reward += reward
 
         return {"state": prev_state,
                 "action": action,
@@ -147,7 +169,7 @@ class LearningAgent(metaclass=ABCMeta):
                     step number [starting at 1], return value of act_in_env
 
         """
-        for step in range(1, num_steps):
+        for step in range(1, num_steps + 1):
             yield (step, self.act_in_env(training))
 
     def run_trajectory(self):
@@ -158,10 +180,8 @@ class LearningAgent(metaclass=ABCMeta):
                 return env_info from act_in_env
         """
         terminate = False
-        self._steps = 0
         while not terminate:
             env_info = self.act_in_env(False)
-            self._steps += 1
             terminate = bool(env_info["done"])
             yield env_info
 
@@ -172,11 +192,10 @@ class LearningAgent(metaclass=ABCMeta):
             Returns:
                 number of steps agent went through
         """
-        self._steps = 0
+        steps = 0
         while not self.act_in_env(False)["done"]:
-            self._steps += 1
-
-        return self._steps
+            steps += 1
+        return steps
 
 
 class ActionValueAgent(LearningAgent, metaclass=ABCMeta):
@@ -248,7 +267,8 @@ class DiscreteActionSpaceAgent(LearningAgent, metaclass=ABCMeta):
         action_space = environment.action_space
 
         if not isinstance(action_space, gym.spaces.Discrete):
-            raise ValueError("environment.action_space must be of type gym.spaces.Discrete ") # TODO: replace with specific exception
+            raise ValueError("environment.action_space must"
+                             " be of type gym.spaces.Discrete ")
 
         self._num_of_actions = action_space.n
         self.sample_action = self._action_wrapper(self.sample_action)
@@ -288,16 +308,17 @@ class ContinuousActionSpaceAgent(LearningAgent, metaclass=ABCMeta):
         action_space = self._environment.action
 
         if not isinstance(action_space, gym.spaces.Box):
-            raise Exception() # TODO: replace with specific exception
+            raise ValueError("Environment for ContinuousActionSpaceAgent must "
+                             "have a continuous aciton-space!")
 
         self._action_low = action_space.low
         self._action_high = action_space.high
         self._action_shape = action_space.shape
 
         super().__init__(policy=policy,
-                                                         environment=environment,
-                                                         discount_factor=discount_factor,
-                                                         **kwargs)
+                         environment=environment,
+                         discount_factor=discount_factor,
+                         **kwargs)
 
     @property
     def action_low(self):
