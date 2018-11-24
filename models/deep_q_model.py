@@ -12,7 +12,6 @@ class DeepQModel(LearningModel):
                  environment,
                  model_scope,
                  agent,
-                 steps_to_run_for,
                  improve_policy_modulo,
                  steps_for_act_iter,
                  replay_buffer,
@@ -43,7 +42,6 @@ class DeepQModel(LearningModel):
                          environment,
                          model_scope,
                          agent,
-                         steps_to_run_for,
                          improve_policy_modulo,
                          steps_for_act_iter)
     @property
@@ -90,7 +88,7 @@ class DeepQModel(LearningModel):
 
             self._replay_buffer.push(sarsa)
 
-        return {"steps" : self.steps}
+        return {"steps" : self.steps, "traj_reward" : steps}
 
     def train_iteration(self, info_dict):
         """ Determines whether to update policy or target based on step count """

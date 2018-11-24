@@ -56,7 +56,6 @@ def build_model(models_config, environment, is_training):
                     environment,
                     model_scope,
                     agent,
-                    models_config.steps_to_run_for,
                     models_config.improve_policy_modulo,
                     models_config.steps_for_act_iter)
 

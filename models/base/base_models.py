@@ -15,14 +15,12 @@ class LearningModel(metaclass=ABCMeta):
                  environment,
                  model_scope,
                  agent,
-                 steps_to_run_for,
                  improve_policy_modulo,
                  steps_for_act_iter,
                  **kwargs):
         self._agent = agent
         self._environment = environment
         self._model_scope = model_scope
-        self._steps_to_run_for = steps_to_run_for
         self._improve_policy_modulo = improve_policy_modulo
         self._steps_for_act_iter = steps_for_act_iter
         self._graph = graph
