@@ -251,7 +251,6 @@ def _deep_approximator(cls):
 
             ops = [v[1] for v in self._copy_ops.values()]
 
-
             suffix_start = len(self.name_scope.split("/"))
 
             network_params = network.trainable_parameters_dict
@@ -260,8 +259,11 @@ def _deep_approximator(cls):
 
             replaced_scope = {strip_and_replace_scope(self.name_scope, k, suffix_start) :
                               v for k, v in network_params_runtime.items()}
-
-            feed_dict = {v[0] : replaced_scope[k] for k, v in self._copy_ops.items()}
+            try:
+                feed_dict = {v[0] : replaced_scope[k] for k, v in self._copy_ops.items()}
+            except KeyError:
+                raise ValueError("There was a problem attempting to copy network params!"
+                                 " Are the networks both the same structure?")
 
             return lambda: session.run(ops, feed_dict=feed_dict)
 
