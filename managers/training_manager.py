@@ -173,6 +173,8 @@ class TrainingManager:
         alpha = self._config.average_smoothing
         smoothed_reward = 0
 
+        tf.summary.FileWriter(self._model.checkpoint_dir_path, self._model.graph)
+
         while self._model.steps < self._run_for_steps and not stopper.should_stop:
             with self._model.checkpoint_lock:
                 info_dict = self._model.act_iteration()
