@@ -34,6 +34,12 @@ class Infer:
         if shutdown:
             self.shutdown()
 
+    @property
+    def env(self):
+        """ fetch model env
+        """
+        return self._model.environment
+
 
     def shutdown(self):
         """ Cleans up model
