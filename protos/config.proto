@@ -17,6 +17,10 @@ message Config {
 
     required int64 run_for_steps = 6;
 
+    optional int64 info_log_frequency = 7 [default=100];
+
+    optional float average_smoothing = 8 [default=0.95];
+
 
 
 }
