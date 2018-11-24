@@ -39,13 +39,15 @@ class Train:
         """ Handles training ending gracefully. Attempts to save
         model to checkpoint
         """
+        show_traceback = False
         if exception_type:
-            if isinstance(exception_type, KeyboardInterrupt):
+            if exception_type is KeyboardInterrupt:
                 tf.logging.warn("Training ended by user")
             else:
                 tf.logging.error("Found Exception %s" % exception_type)
                 tf.logging.error("Exception value %s" % exception_value)
                 tf.logging.warn("We will still try to save the model!")
+                show_traceback = True
         else:
             print("Training has completed.")
 
@@ -57,6 +59,7 @@ class Train:
             tf.logging.warn("Starting shutdown proceedures")
             self._training_manager.shutdown()
             tf.logging.info("Shutdown has complete")
+            return not show_traceback
         except Exception as fatal_exception:
             # something terribly wrong
             tf.logging.fatal("Failed to shutdown properly!.")
@@ -170,7 +173,7 @@ class TrainingManager:
 
         tf.logging.set_verbosity(tf.logging.INFO)
 
-        log_steps_times = self._run_for_steps / self._config.info_log_frequency
+
         alpha = self._config.average_smoothing
         smoothed_reward = 0
 
@@ -181,7 +184,7 @@ class TrainingManager:
         while self._model.steps < self._run_for_steps and not stopper.should_stop:
             with self._model.checkpoint_lock:
                 info_dict = self._model.act_iteration()
-
+                should_log = self._model.steps % self._config.info_log_frequency == 0
                 if "traj_rewards" in info_dict:
                     rewards = info_dict["traj_rewards"]
                     if rewards:
@@ -189,13 +192,13 @@ class TrainingManager:
 
                         smoothed_reward = reduce(smooth(alpha), rewards)
 
-                    tf.logging.log_every_n(tf.logging.INFO,
-                                           "Running Average Reward %.2f" % smoothed_reward,
-                                           log_steps_times)
+                    tf.logging.log_if(tf.logging.INFO,
+                                      "Running Average Reward %.2f" % smoothed_reward,
+                                      should_log)
 
-                tf.logging.log_every_n(tf.logging.INFO,
-                                       "Model completed a total of %d steps." % self._model.steps,
-                                       log_steps_times)
+                tf.logging.log_if(tf.logging.INFO,
+                                  "Model completed a total of %d steps." % self._model.steps,
+                                  should_log)
 
                 self._model.train_iteration(info_dict)
 
