@@ -15,8 +15,9 @@ class GymEnvironment(Environment):
         _, reward, __, ___ = self._gym.step(action)
         reward_col_dim = reward.shape[0] if isinstance(reward, np.ndarray) else 1
 
+        # TODO state/next_state is redundant
         self._dims = {"state_col_dim": state_col_dim, "action_col_dim": action_col_dim,\
-            "reward_col_dim": reward_col_dim, "next_state_col_dim": state_col_dim} # TODO state/next_state is redundant
+                      "reward_col_dim": reward_col_dim, "next_state_col_dim": state_col_dim}
 
     def step(self, action):
         next_state, reward, done, _ = self._gym.step(action)
@@ -24,6 +25,11 @@ class GymEnvironment(Environment):
 
     def reset(self):
         return self._gym.reset()
+
+    def render(self):
+        """ Renders Gym
+        """
+        self._gym.render()
 
     @property
     def action_space(self):
