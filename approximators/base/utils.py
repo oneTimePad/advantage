@@ -21,7 +21,7 @@ def parse_optimizer(optimizer):
             tf optimizer function
     """
     return _OPTIMIZERS[parse_enum_to_str(utils_pb2,
-                                     "optimizer",
+                                         "optimizer",
                                          optimizer)]
 
 _ACTIVATIONS = {
