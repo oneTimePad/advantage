@@ -1,4 +1,6 @@
+from functools import partial
 import gym
+import random
 import numpy as np
 from abc import ABCMeta
 from abc import abstractmethod
@@ -197,34 +199,80 @@ class LearningAgent(metaclass=ABCMeta):
             steps += 1
         return steps
 
-
-class ActionValueAgent(LearningAgent, metaclass=ABCMeta):
+# pylint: disable=W0223
+# reason-disabled: this class is also abstract
+class OffPolicyValueAgent(LearningAgent, metaclass=ABCMeta):
     """ Represents an RL Agent that is Value-function based using Sample-based RL.
     Also known as Temporal-Difference Learning. It computes the expected Reward utilizing
     samples from the environment and boostrapping. The Action-Value is used for control.
+    The agent usually is used in a Discrete Action space
     """
 
-    def __init__(self,
-                 policy,
-                 environment,
-                 discount_factor,
-                 maximum_function,
-                 **kwargs):
+    def __init__(self, environment, *args, **kwargs):
+        action_space = environment.action_space
+        self._num_of_actions = action_space.n
 
-        self._maximum_function = maximum_function
-        super().__init__(policy=policy,
-                         environment=environment,
-                         discount_factor=discount_factor,
+        if not isinstance(action_space, gym.spaces.Discrete):
+            raise ValueError("environment.action_space must"
+                             " be of type gym.spaces.Discrete ")
+
+        self._maximum_function = partial(np.argmax, axis=1)
+
+        # calculates epsilon during training
+        # set by subclass (only for training)
+        self.epsilon_func = lambda: None
+
+        super().__init__(environment=environment,
+                         *args,
                          **kwargs)
 
     @property
+    def num_of_actions(self):
+        """ _num_of_actions property
+        """
+        return self._num_of_actions
+
+    @property
     def maximum_function(self):
+        """ property for `_maximum_function`
+        """
         return self._maximum_function
 
-    def sample_action(self, conditional_policy, training):
-        """ Action is chosen as the action with maximum action-value
+    def _act_epsilon_greedily(self, sampled_action):
+        """ Follows an epsilon-greedy policy
+        for off-policy training
+
+            Args:
+                sampled_action: action sampled from p(a|s)
+
+            Returns:
+                possible-randomly chosen action
         """
-        return self._maximum_function(conditional_policy)
+
+        eps = self.epsilon_func()
+
+        if not eps:
+            raise AttributeError("Subclass must set epsilon_func to valid callable")
+
+        if not 0. < eps < 1.:
+            raise ValueError("Epsilon must be in [0, 1.0]")
+
+        prob = random.random()
+        return sampled_action if prob > eps else self.action_space.sample()
+
+    def sample_action(self, conditional_policy, training):
+        """ Samples an action from the conditional policy
+        distribution
+
+            Args:
+                conditional_policy : pi(a|s)
+                training: whether agent is training
+
+            Returns:
+                sampled action
+        """
+        sampled = self._maximum_function(conditional_policy)[0]
+        return sampled if not training else self._act_epsilon_greedily(sampled)
 
 class PolicyGradientAgent(LearningAgent, metaclass=ABCMeta):
     """ Represents an RL Agent using Policy Gradients. The agent computes the
@@ -236,7 +284,7 @@ class PolicyGradientAgent(LearningAgent, metaclass=ABCMeta):
                  discount_factor,
                  expected_reward,
                  **kwargs):
-        self._expected_reward = expected_reward # TODO create a special expected reward class
+        self._expected_reward = expected_reward
 
         super().__init__(policy=policy,
                          environment=environment,
@@ -253,49 +301,8 @@ class PolicyGradientAgent(LearningAgent, metaclass=ABCMeta):
     def _compute_policy_gradient(self):
         """ Computes the policy Gradient
         """
-        # TODO not finished...not sure how this will be used yet.
         raise NotImplementedError()
 
-class DiscreteActionSpaceAgent(LearningAgent, metaclass=ABCMeta):
-    """ Represents an RL Agent with a discrete agent space
-    """
-
-    def __init__(self, policy,
-                 environment,
-                 discount_factor,
-                 **kwargs):
-        action_space = environment.action_space
-
-        if not isinstance(action_space, gym.spaces.Discrete):
-            raise ValueError("environment.action_space must"
-                             " be of type gym.spaces.Discrete ")
-
-        self._num_of_actions = action_space.n
-        self.sample_action = self._action_wrapper(self.sample_action)
-        super().__init__(policy=policy,
-                         environment=environment,
-                         discount_factor=discount_factor,
-                         **kwargs)
-
-    @property
-    def num_of_actions(self):
-        """ _num_of_actions property
-        """
-        return self._num_of_actions
-
-    def _action_wrapper(self, func):
-        """ It's hard to say where this goes atm, but it's related to the fact
-        that np.argmax on a (1, N) ndarray returns a one element array...
-        Might need to go in ActionValueAgent, which could technically generalize to Continuous
-        Agents, where this would then pose a problem.
-        """
-        #TODO Look for a better place to put this...
-        def wrapper(conditional_policy, training):
-            action = func(conditional_policy, training)
-            if isinstance(action, np.ndarray):
-                return int(action[0])
-            return int(action)
-        return wrapper
 
 class ContinuousActionSpaceAgent(LearningAgent, metaclass=ABCMeta):
     """ Represents an RL Agent with a continuous action space """
