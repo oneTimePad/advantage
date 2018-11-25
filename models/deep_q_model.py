@@ -112,7 +112,7 @@ class DeepQModel(LearningModel):
                 batch = self._replay_buffer.random_sample(self._batch_size,
                                                           sample_less=self._train_sample_less)
 
-                reduced_sarsa = Sarsa.reduce(batch)
+                reduced_sarsa = Sarsa.stack(batch)
                 normalized_sarsa = Sarsa.normalize_element(self._norm_stats,
                                                            self.steps,
                                                            reduced_sarsa)
