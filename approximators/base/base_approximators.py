@@ -307,10 +307,22 @@ def _deep_approximator(cls):
             """
             with self._approximator_scope():
                 self._applied_gradients = gradients
-                global_step = tf.train.get_or_create_global_step(graph=self._graph)
+                global_step = tf.train.get_or_create_global_step()
 
                 self._train_op = self._optimizer.apply_gradients(gradients,
                                                                  global_step=global_step)
+
+        def minimize(self, loss):
+            """ Short for minimizing loss
+                    Args:
+                        loss: loss to minimize
+            """
+            with self._approximator_scope():
+                self._loss = loss
+                global_step = tf.train.get_or_create_global_step()
+                self._train_op = self._optimizer.minimize(loss,
+                                                          var_list=self.trainable_parameters,
+                                                          global_step=global_step)
 
 
         def update(self, session, runtime_inputs, runtime_targets):

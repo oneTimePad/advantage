@@ -66,8 +66,10 @@ class DeepQAgent(ApproximateAgent, DiscreteActionSpaceAgent, ActionValueAgent):
             # the mean square error between target and network
             loss = tf.reduce_mean(tf.square(target_plh - action_q))
 
-        gradients = self._target.gradients(loss)
-        self._target.apply_gradients(gradients)
+        #gradients = self._target.gradients(loss)
+        #self._target.apply_gradients(gradients)
+
+        self._target.minimize(loss)
 
         self._policy.initialize(self.session)
         self._target.initialize(self.session)
