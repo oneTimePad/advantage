@@ -1,3 +1,4 @@
+from google.protobuf.json_format import MessageToDict
 import numpy as np
 from advantage.elements.base.element import Element, NumpyElementMixin, NormalizingElementMixin
 
@@ -19,6 +20,24 @@ class Sarsa(Element, NumpyElementMixin, NormalizingElementMixin):
     done = np_attr(np.bool)
     next_state = np_attr(np.float32)
     next_action = np_attr(np.float32)
+
+    @staticmethod
+    def proto_name_to_attr_dict():
+        """ Creates dict for mapping key entries
+        in protobuf file to actual attr names
+        """
+        return {"normalizeState" : "state",
+                "normalizeAction" : "action",
+                "normalizeReward" : "reward"}
+
+    @staticmethod
+    def normalize_list_from_config(config):
+        """ Construct list of attrs to normalize
+        from protobuf config
+        """
+        sarsa_as_dict = MessageToDict(config)
+        attr_mapping = Sarsa.proto_name_to_attr_dict()
+        return [v for k, v in attr_mapping.items() if k not in sarsa_as_dict.keys()]
 
     @classmethod
     def make_element(cls,

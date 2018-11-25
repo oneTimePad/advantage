@@ -23,16 +23,19 @@ class Infer:
 
     # credit to https://tinyurl.com/exit-best-practices
     def __exit__(self, exception_type, exception_value, traceback, shutdown=True):
-        if isinstance(exception_type, KeyboardInterrupt):
-            tf.logging.warn("Inference ended by user")
-            shutdown = True
-        elif isinstance(exception_type, Exception):
-            tf.logging.fatal("Found Exception %s" % exception_type)
-            tf.logging.fatal("Exception value %s" % exception_value)
-            tf.logging.fatal("Exception traceback %s" % traceback)
+        show_traceback = False
+        if exception_type:
+            if exception_type is KeyboardInterrupt:
+                tf.logging.warn("Inference ended by user")
+                shutdown = True
+            else:
+                tf.logging.fatal("Found Exception %s" % exception_type)
+                tf.logging.fatal("Exception value %s" % exception_value)
+                show_traceback = True
 
-        if shutdown:
-            self.shutdown()
+        self.shutdown()
+
+        return not show_traceback
 
     @property
     def env(self):
