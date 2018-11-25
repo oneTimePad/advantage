@@ -1,5 +1,3 @@
-import numpy as np
-from functools import partial
 from abc import ABCMeta
 import tensorflow as tf
 from advantage.agents.base.base_agents import LearningAgent
