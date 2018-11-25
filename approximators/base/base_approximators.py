@@ -56,7 +56,7 @@ def _produce_feed_dict(runtime_tensor_inputs, placeholders):
     return feed_dict
 
 
-def _deep_approximator(cls):
+def deep_approximator(cls):
     """ Wraps the DeepApproximator interface
         providing extended functionality
         and wrapping implemented methods
@@ -225,8 +225,7 @@ def _deep_approximator(cls):
             self._wrapped.config = model_config
 
             with self._approximator_scope():
-                last_block = self._wrapped.set_up(model_config,
-                                                  tensor_inputs,
+                last_block = self._wrapped.set_up(tensor_inputs,
                                                   inputs_placeholders)
 
             self._post_set_up(inputs_placeholders,
