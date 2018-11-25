@@ -20,7 +20,6 @@ class DeepQAgent(OffPolicyValueAgent, ApproximateAgent):
                  target_q_network,
                  epsilon):
 
-
         self._target = target_q_network
         self._init_epsilon = epsilon
         self._copy = None
