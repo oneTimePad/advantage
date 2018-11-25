@@ -184,7 +184,7 @@ def checkpointable(cls, **exclude):
                     try:
                         self._tf_saver.restore(self.restore_session,
                                                latest_ckpt)
-                        tf.logging.info("Restored from %s." % latest_ckpt)
+                        tf.logging.warn("Restored from %s." % latest_ckpt)
                     except Exception:
                         raise CheckpointError("Failed to restore from %s." % latest_ckpt)
 

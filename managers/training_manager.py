@@ -49,7 +49,7 @@ class Train:
                 tf.logging.warn("We will still try to save the model!")
                 show_traceback = True
         else:
-            print("Training has completed.")
+            tf.logging.warn("Training has completed.")
 
         # all shutdown procedures will run sequentially in `shutdown`
         # if one fails we will still continue
@@ -197,7 +197,7 @@ class TrainingManager:
                                       should_log)
 
                 tf.logging.log_if(tf.logging.INFO,
-                                  "Model completed a total of %d steps." % self._model.steps,
+                                  "Agent completed a total of %d steps." % self._model.steps,
                                   should_log)
 
                 self._model.train_iteration(info_dict)
