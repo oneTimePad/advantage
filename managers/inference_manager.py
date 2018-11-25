@@ -33,7 +33,8 @@ class Infer:
                 tf.logging.fatal("Exception value %s" % exception_value)
                 show_traceback = True
 
-        self.shutdown()
+        if shutdown:
+            self.shutdown()
 
         return not show_traceback
 
@@ -49,7 +50,7 @@ class Infer:
         """
         self._model.clean()
 
-    def as_default(self):
+    def reuse(self):
         """ Allows `Infer` to be used
         multiple times without shutdowning
         down at end of `with`

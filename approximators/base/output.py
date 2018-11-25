@@ -1,5 +1,5 @@
-import tensorflow as tf
 from functools import partial
+import tensorflow as tf
 from advantage.utils.proto_parsers import parse_which_one, proto_to_dict
 
 """ Approximators can utilize various `outputs`

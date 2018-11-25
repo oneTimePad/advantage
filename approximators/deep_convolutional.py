@@ -1,8 +1,8 @@
 import tensorflow as tf
-from advantage.approximators.base.base_approximators import DeepApproximator
+from advantage.approximators.base.base_approximators import DeepApproximator, deep_approximator
 from advantage.approximators.base.utils import parse_activation, parse_initializer, parse_padding
-from advantage.checkpoint import checkpointable
 
+@deep_approximator
 class DeepConvolutional(DeepApproximator):
     """ Convolutional Network"""
 
