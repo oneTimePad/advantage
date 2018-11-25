@@ -1,5 +1,3 @@
-from functools import partial
-import numpy as np
 import tensorflow as tf
 from advantage.agents.base.base_agents import OffPolicyValueAgent
 from advantage.agents.base.approximate_agents import ApproximateAgent
