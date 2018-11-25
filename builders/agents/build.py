@@ -41,8 +41,8 @@ def build_agent(graph, environment, upper_scope, is_training, agents_config):
                                   agents_config.name_scope)
 
     agent = partial(agent,
-                    graph,
                     environment,
+                    graph,
                     agent_scope,
                     agents_config.discount_factor)
 
