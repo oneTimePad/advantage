@@ -1,4 +1,3 @@
-from google.protobuf.json_format import MessageToDict
 import tensorflow as tf
 from advantage.builders.buffers import build_buffer
 
@@ -17,7 +16,7 @@ class ModelBuilders:
         raise NotImplementedError("Can't instantiate")
 
     #pylint: disable=C0103
-    #reason-disabled: method needs to contain propert cls name
+    #reason-disabled: method needs to contain proper cls name
     @staticmethod
     def build_DeepQModel(model,
                          environment,
@@ -39,12 +38,15 @@ class ModelBuilders:
                 Returns:
                     DeepQModel
         """
-        buffers_config = config.buffer
-        experience_replay_buffer = build_buffer(buffers_config)
+        from advantage.elements import Sarsa
 
-        sarsa_as_dict = MessageToDict(config.sarsa)
-        sarsa_attrs_to_normalize = filter(lambda x: x in sarsa_as_dict.keys(),
-                                          ["state", "action", "reward"])
+        experience_replay_buffer = None
+        sarsa_attrs_to_normalize = []
+        if is_training:
+            buffers_config = config.buffer
+            experience_replay_buffer = build_buffer(buffers_config)
+
+            sarsa_attrs_to_normalize = Sarsa.normalize_list_from_config(config.sarsa)
 
         return model(experience_replay_buffer,
                      sarsa_attrs_to_normalize,
