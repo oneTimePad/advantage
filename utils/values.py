@@ -28,7 +28,7 @@ def apply_bellman_operator(session, policy, sarsa, gamma, state_plh_name):
     if not isinstance(session, tf.Session):
         raise ValueError("Must pass in a tf.Session object")
 
-    states, actions, rewards, dones, next_states, next_actions = sarsa.unzip_to_tuple()
+    states, actions, rewards, dones, next_states, _ = sarsa.unzip_to_tuple()
 
     q_values = policy.inference(session, {state_plh_name: next_states})
 
