@@ -2,6 +2,7 @@ from functools import partial
 import gym
 import random
 import numpy as np
+import tensorflow as tf
 from abc import ABCMeta
 from abc import abstractmethod
 
@@ -27,6 +28,7 @@ class LearningAgent(metaclass=ABCMeta):
         self._traj_reward = 0 # current trajectory reward
         self._dis_traj_reward = 0 # current discounted trajectory reward
         self._discount_factor = discount_factor
+        self.info_log_frequency = None
 
     @property
     def discount_factor(self):
@@ -117,15 +119,25 @@ class LearningAgent(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-
     @abstractmethod
-    def improve_policy(self, samples):
+    def improve_policy(self):
         """ Improves the current policy based on Information
-        observed from evaluation.
-            Args:
-                samples: samples to improve using
+        observed from evaluation. Subclasses define other
+        attrs to use this.
         """
         raise NotImplementedError()
+
+    def log_info(self, msg):
+        """ Allows for `LearningAgent`
+        to log
+
+            Args:
+                msg: message to log
+        """
+        should_log = self.total_steps %  self.info_log_frequency == 0
+        tf.logging.log_if(tf.logging.INFO,
+                          msg,
+                          should_log)
 
     def act_in_env(self, training):
         """ Agent acts in the environment
@@ -254,8 +266,8 @@ class OffPolicyValueAgent(LearningAgent, metaclass=ABCMeta):
         if not eps:
             raise AttributeError("Subclass must set epsilon_func to valid callable")
 
-        if not 0. < eps < 1.:
-            raise ValueError("Epsilon must be in [0, 1.0]")
+        if not 0. < eps <= 1.:
+            raise ValueError("Epsilon must be in (0, 1.0]")
 
         prob = random.random()
         return sampled_action if prob > eps else self.action_space.sample()

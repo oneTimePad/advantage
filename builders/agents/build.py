@@ -11,11 +11,17 @@ import advantage.agents
 """Build function for constructing the various Agents
 """
 
-def build_agent(graph, environment, upper_scope, is_training, agents_config):
+def build_agent(graph,
+                environment,
+                info_log_frequency,
+                upper_scope,
+                is_training,
+                agents_config):
     """ Builds an Agent based on configuration
             Args:
                 graph: TF graph
                 environment: OpenAI Gym `Gym` object
+                info_log_frequency: log frequency in steps
                 upper_scope: ScopeWrap from higher level (Models)
                 agents_config: configuration from protobuf for agent
 

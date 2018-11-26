@@ -1,7 +1,7 @@
 import tensorflow as tf
 from advantage.agents.base.base_agents import OffPolicyValueAgent
 from advantage.agents.base.approximate_agents import ApproximateAgent
-from advantage.utils.values import apply_bellman_operator
+from advantage.utils.value_agent import bellman_operator, decayed_epsilon
 
 class DeepQAgent(OffPolicyValueAgent, ApproximateAgent):
     """ Implements the DeepQNetworks Agent. The DQN Agent
@@ -21,7 +21,9 @@ class DeepQAgent(OffPolicyValueAgent, ApproximateAgent):
                  epsilon):
 
         self._target = target_q_network
-        self._init_epsilon = epsilon
+
+        self._epsilon = epsilon
+
         self._copy = None
 
         super().__init__(policy=policy_q_network,
@@ -30,15 +32,12 @@ class DeepQAgent(OffPolicyValueAgent, ApproximateAgent):
                          agent_scope=agent_scope,
                          discount_factor=discount_factor)
 
-    @property
-    def init_epsilon(self):
-        """ _epsilon property
-        """
-        return self._init_epsilon
 
     def set_up_train(self):
 
-        self.epsilon_func = lambda: self._init_epsilon
+        self.epsilon_func = decayed_epsilon(self,
+                                            self._epsilon)
+
 
         target_net = self._target.network
 
@@ -61,9 +60,6 @@ class DeepQAgent(OffPolicyValueAgent, ApproximateAgent):
             # the mean square error between target and network
             loss = tf.reduce_mean(tf.square(target_plh - action_q))
 
-        #gradients = self._target.gradients(loss)
-        #self._target.apply_gradients(gradients)
-
         self._target.minimize(loss)
 
         self._policy.initialize(self.session)
@@ -72,16 +68,12 @@ class DeepQAgent(OffPolicyValueAgent, ApproximateAgent):
         self._copy = self._policy.make_copy_op(self.session,
                                                self._target)
 
-
-
     def set_up(self):
         self._policy.initialize(self.session)
 
     def evaluate_policy(self, state):
         return self._policy.inference(self.session, {"policy_state_plh" : [state]})
 
-    # pylint: disable=W0221
-    # reason-disabled: some arguments from interface method not used
     def improve_policy(self):
         """Policy is improved by copying target params to policy network
         """
@@ -93,11 +85,11 @@ class DeepQAgent(OffPolicyValueAgent, ApproximateAgent):
                     Sarsa: object containing aggregated results
         """
 
-        states, actions_taken, targets = apply_bellman_operator(self.session,
-                                                                self._policy,
-                                                                sarsa,
-                                                                self._discount_factor,
-                                                                "policy_state_plh")
+        states, actions_taken, targets = bellman_operator(self.session,
+                                                          self._policy,
+                                                          sarsa,
+                                                          self._discount_factor,
+                                                          "policy_state_plh")
 
         feed_dict_in = {"tgt_state_plh" : states}
 

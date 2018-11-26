@@ -95,6 +95,8 @@ def checkpointable(cls, **exclude):
             self.checkpoint_freq_sec = None
             self._tf_global_step = None
 
+            self._info_log_frequency = None
+
         def __getattr__(self, attr):
             return getattr(self._wrapped, attr)
 
@@ -111,12 +113,25 @@ def checkpointable(cls, **exclude):
             """
             return self._tf_global_step
 
-
         @property
         def adv_checkpointable(self):
             """ property for `_adv_checkpointable`
             """
             return self._adv_checkpointable
+
+        @property
+        def info_log_frequency(self):
+            """ property for info_log_frequency
+            """
+            return self._info_log_frequency
+
+        @info_log_frequency.setter
+        def info_log_frequency(self, freq):
+            """ setter for propagating attr to wrapped
+            cls
+            """
+            self._wrapped.info_log_frequency = freq
+            self._info_log_frequency = freq
 
         def _checkpoint(self):
             """ Tells TF to save a model variables to checkpoint proto
@@ -237,12 +252,14 @@ def checkpointable(cls, **exclude):
             Runs `set_up_train` method of `wrapped` class.
             Also setups checkpoint system.
             """
+            with self.model_scope():
+                # this is where the global_step is created
+                global_step = tf.train.get_or_create_global_step()
+                self._tf_global_step = global_step
+
             self._wrapped.set_up_train()
 
             with self.model_scope():
-                global_step = tf.train.get_or_create_global_step()
-
-                self._tf_global_step = global_step
 
                 var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                                              scope=self.name_scope)

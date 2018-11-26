@@ -80,7 +80,8 @@ class Train:
         """
         if not env:
             env = build_environment(config.environment)
-        model = build_model(config.model, env, True)
+
+        model = build_model(config.model, env, config.info_log_frequency, True)
         return cls(model,
                    config.run_for_steps,
                    config.checkpoint_dir_path,
@@ -184,7 +185,7 @@ class TrainingManager:
         while self._model.steps < self._run_for_steps and not stopper.should_stop:
             with self._model.checkpoint_lock:
                 info_dict = self._model.act_iteration()
-                should_log = self._model.steps % self._config.info_log_frequency == 0
+
                 if "traj_rewards" in info_dict:
                     rewards = info_dict["traj_rewards"]
                     if rewards:
@@ -192,13 +193,9 @@ class TrainingManager:
 
                         smoothed_reward = reduce(smooth(alpha), rewards)
 
-                    tf.logging.log_if(tf.logging.INFO,
-                                      "Running Average Reward %.2f" % smoothed_reward,
-                                      should_log)
+                    self._model.log_info("Running Average Reward %.2f" % smoothed_reward)
 
-                tf.logging.log_if(tf.logging.INFO,
-                                  "Agent completed a total of %d steps." % self._model.steps,
-                                  should_log)
+                self._model.log_info("Agent completed a total of %d steps." % self._model.steps)
 
                 self._model.train_iteration(info_dict)
 

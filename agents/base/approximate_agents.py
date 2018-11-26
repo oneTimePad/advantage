@@ -14,6 +14,7 @@ class ApproximateAgent(LearningAgent, metaclass=ABCMeta):
         self._graph = graph
         self._session = None
         self._agent_scope = agent_scope
+
         super().__init__(policy=policy,
                          environment=environment,
                          discount_factor=discount_factor,
