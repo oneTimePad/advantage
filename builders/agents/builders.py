@@ -33,7 +33,6 @@ class AgentBuilders:
         """
         tgt_network_config = config.tgt_network
         policy_config = config.policy
-        epsilon = config.epsilon
 
         state_shape = environment.tf_state_shape
 
@@ -46,15 +45,21 @@ class AgentBuilders:
             policy_state_plh = tf.placeholder(shape=state_shape,
                                               dtype=tf.float32,
                                               name="policy_state_plh")
-
+        epsilon = None
         tgt_network = None
         if is_training:
+            from advantage.utils.value_agent import Epsilon
+
             tgt_network = build_approximator(tgt_network_config,
                                              tgt_state_plh,
                                              [tgt_state_plh])
+
+            epsilon = Epsilon.from_config(config.epsilon)
 
         policy_network = build_approximator(policy_config,
                                             policy_state_plh,
                                             [policy_state_plh])
 
-        return agent(policy_network, tgt_network, epsilon)
+        return agent(policy_network,
+                     tgt_network,
+                     epsilon)

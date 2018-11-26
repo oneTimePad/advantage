@@ -3,7 +3,7 @@ import os
 import numpy as np
 import tensorflow as tf
 from advantage.elements import Sarsa
-from advantage.utils.values import apply_bellman_operator
+from advantage.utils.value_agent import bellman_operator
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 

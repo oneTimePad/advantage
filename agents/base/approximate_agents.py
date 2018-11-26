@@ -1,5 +1,3 @@
-import numpy as np
-from functools import partial
 from abc import ABCMeta
 import tensorflow as tf
 from advantage.agents.base.base_agents import LearningAgent
@@ -16,6 +14,7 @@ class ApproximateAgent(LearningAgent, metaclass=ABCMeta):
         self._graph = graph
         self._session = None
         self._agent_scope = agent_scope
+
         super().__init__(policy=policy,
                          environment=environment,
                          discount_factor=discount_factor,

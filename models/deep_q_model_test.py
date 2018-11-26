@@ -21,7 +21,6 @@ class TestDeepQModel(unittest.TestCase):
         self.dqn_model = build_model(models_config, self.env)
 
     def test_set_up(self):
-        import pdb;pdb.set_trace()
         self.dqn_model.set_up()
 
 

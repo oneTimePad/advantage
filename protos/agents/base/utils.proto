@@ -1,0 +1,10 @@
+
+
+syntax = "proto2";
+
+message Epsilon {
+    required float initial_value = 1;
+    required float min_value = 2;
+    required int64 decay_steps = 3;
+    required float decay_rate = 4;
+}

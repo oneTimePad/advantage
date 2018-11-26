@@ -23,6 +23,7 @@ class LearningModel(metaclass=ABCMeta):
         self._model_scope = model_scope
         self._improve_policy_modulo = improve_policy_modulo
         self._steps_for_act_iter = steps_for_act_iter
+        self.info_log_frequency = None
         self._graph = graph
         self._sessions = []
 
@@ -58,6 +59,18 @@ class LearningModel(metaclass=ABCMeta):
             It is up to the model to determine it's interpretation
         """
         raise NotImplementedError()
+
+    def log_info(self, msg):
+        """ Allows for `LearningModel`
+        to log
+
+            Args:
+                msg: message to log
+        """
+        should_log = self.steps % self.info_log_frequency == 0
+        tf.logging.log_if(tf.logging.INFO,
+                          msg,
+                          should_log)
 
     def add_session(self, agent):
         """ Adds session to agent
