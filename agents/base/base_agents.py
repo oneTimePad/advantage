@@ -16,9 +16,13 @@ class LearningAgent(metaclass=ABCMeta):
     formulation.
     """
 
-    # pylint: disable=unused-argument
-    # reason-disabled: kwargs used in multiple inheritance super calls
-    def __init__(self, policy, environment, discount_factor, **kwargs):
+    def __init__(self,
+                 policy,
+                 environment,
+                 graph,
+                 agent_scope,
+                 discount_factor):
+
         self._policy = policy
         self._environment = environment
         self._done = True
@@ -28,6 +32,9 @@ class LearningAgent(metaclass=ABCMeta):
         self._traj_reward = 0 # current trajectory reward
         self._dis_traj_reward = 0 # current discounted trajectory reward
         self._discount_factor = discount_factor
+        self._graph = graph
+        self._session = None
+        self._agent_scope = agent_scope
         self.info_log_frequency = None
 
     @property
@@ -77,6 +84,33 @@ class LearningAgent(metaclass=ABCMeta):
         """ environment action_space as property
         """
         return self.environment.action_space
+
+    @property
+    def session(self):
+        """ property for `_session`
+        """
+        if not isinstance(self._session, tf.Session):
+            raise AttributeError("session not set for agent")
+
+        return self._session
+
+    @session.setter
+    def session(self, sess):
+        """ setter for `_session`
+        """
+        self._session = sess
+
+    @property
+    def graph(self):
+        """ property for `_graph`
+        """
+        return self._graph
+
+    @property
+    def agent_scope(self):
+        """ property for `_agent_scope`
+        """
+        return self._agent_scope
 
     @abstractmethod
     def set_up_train(self):
