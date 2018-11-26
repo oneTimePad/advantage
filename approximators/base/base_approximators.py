@@ -358,6 +358,8 @@ def deep_approximator(cls):
 
     return _DeepApproximator
 
+# pylint: disable=too-few-public-methods
+# reason-disabled: represents just an interface
 class DeepApproximator(metaclass=ABCMeta):
     """ Interface for Deep Approximators
     """
