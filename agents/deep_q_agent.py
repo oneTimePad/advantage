@@ -1,9 +1,8 @@
 import tensorflow as tf
 from advantage.agents.base.base_agents import OffPolicyValueAgent
-from advantage.agents.base.approximate_agents import ApproximateAgent
 from advantage.utils.value_agent import bellman_operator, decayed_epsilon
 
-class DeepQAgent(OffPolicyValueAgent, ApproximateAgent):
+class DeepQAgent(OffPolicyValueAgent):
     """ Implements the DeepQNetworks Agent. The DQN Agent
     utilizes two networks to stabilize Q-Learning for Deep RL approximators.
     A ExperienceReplayBuffer is utilize to allow for the I.I.D necessary condition
