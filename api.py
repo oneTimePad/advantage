@@ -4,6 +4,7 @@ from advantage.managers import Train, Infer
 from advantage.environments import Environment
 from advantage.utils.proto_parsers import parse_obj_from_file
 from advantage.protos import config_pb2
+from advantage.exception import AdvantageError
 
 
 """ The main module exposed to clients of the Advantage framework
@@ -47,12 +48,6 @@ class _AsyncTrainManager:
         """
         if self.runner:
             self.runner.wait(timeout)
-
-
-class AdvantageError(Exception):
-    """ Exception related to the advantage api
-    """
-    pass
 
 class Agent:
     """ This represents a Reinforcement Learning
