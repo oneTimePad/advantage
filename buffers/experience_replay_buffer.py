@@ -5,8 +5,7 @@ import random
 class ExperienceReplayBuffer(object):
     """Allows for collecting various SARSA(usually but not required) tuples taken by an agent.
     This buffer is commonly used in many approximate RL algorithms to
-    allow for I.I.D data to traing non-linear approximators (i.e. NN)
-
+    allow for I.I.D data to training non-linear approximators (i.e. NN)
     """
 
     def __init__(self, buffer_size):

@@ -1,13 +1,31 @@
 import tensorflow as tf
 from advantage.protos.approximators.base import utils_pb2
 from advantage.utils.proto_parsers import parse_enum_to_str
+from advantage.exception import AdvantageError
+
 """ Various utilities specifying options for setting network
 properties
 """
 
+def no_optimizer(name_scope):
+    """ Represents 'No optimizer selected'
+    raises exception if model expects one to be there.
+    (i.e. accesses an attr)
+    """
+    class NoOp:
+        def __init__(self, *args, **kwargs):
+            pass
+        def __getattr__(self, attr):
+            raise AdvantageError("No Optimizer was selected for Approximator"
+                                 "with name_scope=%s. However, the selected RL"
+                                 " model requires one to be selected!" % name_scope)
+    return NoOp
+
+
 _OPTIMIZERS = {
-    "AdamOptimizer": tf.train.AdamOptimizer,
-    "GradientDescentOptimizer": tf.train.GradientDescentOptimizer
+    "NoOptimizer" :  no_optimizer,
+    "AdamOptimizer": lambda x: tf.train.AdamOptimizer, # lambdas are dummys
+    "GradientDescentOptimizer": lambda x: tf.train.GradientDescentOptimizer
 }
 
 def parse_optimizer(optimizer):

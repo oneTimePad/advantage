@@ -22,6 +22,7 @@ enum Initializer {
 }
 
 enum Optimizer {
-    AdamOptimizer = 0;
-    GradientDescentOptimizer = 1;
+    NoOptimizer = 0;
+    AdamOptimizer = 1;
+    GradientDescentOptimizer = 2;
 }

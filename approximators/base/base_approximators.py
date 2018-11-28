@@ -89,7 +89,7 @@ def deep_approximator(cls):
 
             optimizer = parse_optimizer(config.optimizer)
 
-            self._optimizer = optimizer(self._learning_rate)
+            self._optimizer = optimizer(approximator_scope.name_scope)(self._learning_rate)
 
             self._loss = None
             self._applied_gradients = None
