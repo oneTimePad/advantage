@@ -2,9 +2,8 @@ from functools import reduce
 import tensorflow as tf
 import os
 import threading
-import time
 from advantage.utils.decorator_utils import parameterized
-from advantage.utils.tf_utils import build_init_uninit_op
+from advantage.utils.tf_utils import build_init_uninit_op, get_or_create_improve_step
 
 """ Checkpointing system
 """
@@ -85,9 +84,6 @@ def checkpointable(cls, **exclude):
 
             self._checkpoint_thread = None
 
-            self._checkpoint_thread_event = None
-            self._checkpoint_thread_sleep_cond = None
-
             self._tf_saver = None
 
             self.checkpoint_dir_path = None
@@ -99,13 +95,6 @@ def checkpointable(cls, **exclude):
 
         def __getattr__(self, attr):
             return getattr(self._wrapped, attr)
-
-        @property
-        def checkpoint_lock(self):
-            """ property for accessing lock
-            for stopping checkpointing
-            """
-            return self._checkpoint_thread_sleep_cond
 
         @property
         def tf_global_step(self):
@@ -136,16 +125,11 @@ def checkpointable(cls, **exclude):
         def _checkpoint(self):
             """ Tells TF to save a model variables to checkpoint proto
                     Raises:
-                        CheckpointError: this `cls` is not the chain head or
-                            some step for setting up checkpoints was not met
+                        CheckpointError
             """
             if not hasattr(self, "_tf_saver"):
                 raise CheckpointError("This class is not the highest in \
                     the checkpoint chain and must call `set_up`.")
-
-            if not self.restore_session:
-                raise CheckpointError("Instance must set `restore_session` \
-                    to specify which session to restore variables to.")
 
             if not self.checkpoint_dir_path:
                 raise CheckpointError("Instance must set `checkpoint_dir_path`")
@@ -153,21 +137,20 @@ def checkpointable(cls, **exclude):
             if not self.checkpoint_file_prefix:
                 raise CheckpointError("Instance must set `checkpoint_file_prefix`")
 
-            if not self._tf_global_step:
-                raise CheckpointError("Instance must call `set_up`")
-
             file_prefix = self.checkpoint_file_prefix
 
             ckpt_full_path = os.path.join(self.checkpoint_dir_path,
                                           file_prefix)
-            with self.model_scope():
-                step = self.restore_session.run(self._tf_global_step)
 
-                tf.logging.warn("Saving checkpoint for %s-%d" % (file_prefix, step))
-                self._tf_saver.save(self.restore_session,
-                                    ckpt_full_path,
-                                    global_step=self._tf_global_step)
-                tf.logging.info("Checkpoint saved")
+            improve_step = get_or_create_improve_step(self._wrapped.model_scope)
+
+            improve_step_value = self.restore_session.run(improve_step)
+
+            tf.logging.warn("Saving checkpoint for %s-%d" % (file_prefix, improve_step_value))
+            self._tf_saver.save(self.restore_session,
+                                ckpt_full_path,
+                                global_step=improve_step)
+            tf.logging.info("Checkpoint saved")
 
 
         def _try_restore(self, var_list):
@@ -175,11 +158,8 @@ def checkpointable(cls, **exclude):
                     Args:
                         var_list: list of global variables
                     Raises:
-                        CheckpointError: not chain head
+                        CheckpointError
             """
-            if not self.restore_session:
-                raise CheckpointError("Instance must set `restore_session` \
-                    to specify which session to restore variables to.")
 
             if not self.checkpoint_dir_path:
                 raise CheckpointError("Instance must set `checkpoint_dir_path`")
@@ -222,29 +202,25 @@ def checkpointable(cls, **exclude):
             """
             raise NotImplementedError("Need to implement")
 
-        def start_checkpoint_system(self):
+        def start_checkpoint_system(self,
+                                    event,
+                                    condition):
             """ Starts up the action of checkpointing the model.
+
+                    Args:
+                        event: threading.Event to control checkpoint loop
+                        condition: thread.Condition, for checkpoint loop
             """
 
-            self._checkpoint_thread_event = threading.Event()
-            self._checkpoint_thread_event.set()
-            self._checkpoint_thread_sleep_cond = threading.Condition(threading.Lock())
-
-            self._checkpoint_thread = CheckpointThread(self._checkpoint_thread_event,
-                                                       self._checkpoint_thread_sleep_cond,
+            self._checkpoint_thread = CheckpointThread(event,
+                                                       condition,
                                                        self._checkpoint,
                                                        self.checkpoint_freq_sec)
             self._checkpoint_thread.start()
 
-        def stop_checkpoint_system(self):
-            """ Stops the checkpoint system with one file save.
+        def checkpoint_join(self):
+            """ Join on checkpoint thread
             """
-            self._checkpoint_thread_event.clear()
-
-            self._checkpoint_thread_sleep_cond.acquire()
-            self._checkpoint_thread_sleep_cond.notify()
-            self._checkpoint_thread_sleep_cond.release()
-
             self._checkpoint_thread.join()
 
         def set_up_train(self):
@@ -257,12 +233,12 @@ def checkpointable(cls, **exclude):
                 global_step = tf.train.get_or_create_global_step()
                 self._tf_global_step = global_step
 
+
             self._wrapped.set_up_train()
 
             with self.model_scope():
 
-                var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                             scope=self.name_scope)
+                var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
 
 
                 self._tf_saver = tf.train.Saver(var_list)
@@ -278,8 +254,7 @@ def checkpointable(cls, **exclude):
 
             with self.model_scope():
 
-                var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                             scope=self.name_scope)
+                var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
 
                 self._tf_saver = tf.train.Saver(var_list)
 

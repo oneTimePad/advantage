@@ -48,9 +48,11 @@ class ModelBuilders:
 
             sarsa_attrs_to_normalize = Sarsa.normalize_list_from_config(config.sarsa)
 
-        return model(experience_replay_buffer,
+        return model(config.improve_policy_modulo,
+                     config.delay_improvement,
+                     config.train_target_modulo,
+                     config.train_iterations,
+                     experience_replay_buffer,
                      sarsa_attrs_to_normalize,
-                     config.improve_target_modulo,
-                     config.iterations_of_improvement,
                      config.batch_size,
-                     config.train_sample_less)
+                     config.sample_less)

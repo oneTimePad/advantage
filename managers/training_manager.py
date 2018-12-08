@@ -1,9 +1,12 @@
 from abc import ABCMeta, abstractmethod
 from functools import reduce
 import tensorflow as tf
+import threading
 from advantage.checkpoint import CheckpointError
 from advantage.utils.proto_parsers import parse_hooks
 from advantage.builders import build_model, build_environment
+from advantage.utils.tf_utils import get_or_create_improve_step, create_improve_step_update_op
+from advantage.loggers.logger import Logger
 
 """ All necessary classes for running the training process
 for an RL model
@@ -15,7 +18,7 @@ class Train:
     """
     def __init__(self,
                  model,
-                 run_for_steps,
+                 improve_for_steps,
                  checkpoint_dir_path,
                  checkpoint_file_prefix,
                  checkpoint_freq_sec,
@@ -23,7 +26,7 @@ class Train:
                  hooks,
                  stopper):
         self._training_manager = TrainingManager(model,
-                                                 run_for_steps,
+                                                 improve_for_steps,
                                                  checkpoint_dir_path,
                                                  checkpoint_file_prefix,
                                                  checkpoint_freq_sec,
@@ -81,9 +84,9 @@ class Train:
         if not env:
             env = build_environment(config.environment)
 
-        model = build_model(config.model, env, config.info_log_frequency, True)
+        model = build_model(config.model, env, True)
         return cls(model,
-                   config.run_for_steps,
+                   config.improve_for_steps,
                    config.checkpoint_dir_path,
                    config.checkpoint_file_prefix,
                    config.checkpoint_freq_sec,
@@ -97,7 +100,7 @@ class TrainingManager:
     """
     def __init__(self,
                  model,
-                 run_for_steps,
+                 improve_for_steps,
                  checkpoint_dir_path,
                  checkpoint_file_prefix,
                  checkpoint_freq_sec,
@@ -119,7 +122,7 @@ class TrainingManager:
         self._model.checkpoint_file_prefix = checkpoint_file_prefix
         self._model.checkpoint_freq_sec = checkpoint_freq_sec
 
-        self._run_for_steps = run_for_steps
+        self._improve_for_steps = improve_for_steps
 
         self._config = config
 
@@ -129,9 +132,38 @@ class TrainingManager:
 
         self._stopper = stopper
 
+        self.increment_improve_step = None
+        self._improve_step_value_fetch = lambda: None
+
+        self._thread_event = None
+        self._thread_sleep_cond = None
+        self._thread_lock = threading.Lock()
+
+        self._logger = None
+        self._logger_freq_sec = config.info_log_frequency
+
+        self._logger_thread_started = False
+        self._checkpoint_thread_started = False
+
+    @property
+    def improve_step_value(self):
+        """ property for fetching runtime
+        value of `improve_step`
+        """
+        return self._improve_step_value_fetch()
+
+
     def set_up(self):
         """ builds all necessary dependencies for training
         """
+        improve_step = get_or_create_improve_step(self._model.model_scope) # created here
+
+        increment_improve_step = create_improve_step_update_op(self._model.model_scope,
+                                                               improve_step)
+
+        self.increment_improve_step = lambda model=self._model: model.restore_session.run(increment_improve_step)
+        self._improve_step_value_fetch = lambda model=self._model: model.restore_session.run(improve_step)
+
         self._model.set_up_train()
 
         TrainHook.set_up_hooks(self._before_train_hooks)
@@ -141,15 +173,54 @@ class TrainingManager:
     def shutdown(self):
         """ Peforms any necessary shutdown procedures
         """
+        self._thread_event.clear()
+
+        self._thread_sleep_cond.acquire()
+        self._thread_sleep_cond.notifyAll()
+        self._thread_sleep_cond.release()
+
+        if self._logger_thread_started:
+            self._logger.join()
+
+        if self._checkpoint_thread_started:
+            self._model.checkpoint_join()
+
+        self._model.clean()
+
+
+    def _startup(self):
+        """ Performs start up procedures
+        """
+
+        thread_event = threading.Event()
+        thread_sleep_cond = threading.Condition(self._thread_lock)
+        thread_event.set()
+        self._thread_event = thread_event
+        self._thread_sleep_cond = thread_sleep_cond
+
+        self._logger = Logger(thread_event,
+                              thread_sleep_cond,
+                              self._logger_freq_sec)
+
+        self._logger.start()
+
+        self._logger_thread_started = True
+
         try:
-            self._model.stop_checkpoint_system() # stop checkpointing
-            self._model.clean()
+            self._model.start_checkpoint_system(thread_event,
+                                                thread_sleep_cond)
+            self._checkpoint_thread_started = True
+
         except AttributeError:
-            tf.logging.error("Checkpoint couldn't be saved. This is"
-                             " because the model class isn't decorated with `checkpointable`")
+            tf.logging.error("Checkpointing system couldn't be started."
+                             " This is because the model class isn't decorated"
+                             " with `checkpointable`")
+            raise Exception("Failed to start checkpoint system")
         except CheckpointError:
-            tf.logging.error("Checkpoint couldn't be saved!"
+            tf.logging.error("Checkpointing system couldn't be started!"
                              " Checkpointing System wasn't setup properly!")
+            raise Exception("Failed to start checkpoint system")
+
 
     def train_model(self):
         """ Runs the actually training process.
@@ -159,33 +230,24 @@ class TrainingManager:
             This runs until a specified termination point.
         """
         TrainHook.run_hooks(self._before_train_hooks)
-        try:
-            self._model.start_checkpoint_system()
-        except AttributeError:
-            tf.logging.error("Checkpointing system couldn't be started. "
-                             "This is because the model class isn't decorated"
-                             " with `checkpointable`")
-            raise Exception("Failed to start checkpoint system")
-        except CheckpointError:
-            tf.logging.error("Checkpointing system couldn't be started!"
-                             " Checkpointing System wasn't setup properly!")
-            raise Exception("Failed to start checkpoint system")
+
+        self._startup()
+
         stopper = self._stopper
 
         tf.logging.set_verbosity(tf.logging.INFO)
 
-
-        alpha = self._config.average_smoothing
-        smoothed_reward = 0
+        #alpha = self._config.average_smoothing
+        #smoothed_reward = 0
 
         tf.summary.FileWriter(self._model.checkpoint_dir_path, self._model.graph)
 
-        smooth = lambda factor: lambda cur, new, f=factor: f * cur + (1. - f) * new
+        #smooth = lambda factor: lambda cur, new, f=factor: f * cur + (1. - f) * new
 
-        while self._model.steps < self._run_for_steps and not stopper.should_stop:
-            with self._model.checkpoint_lock:
+        while self.improve_step_value < self._improve_for_steps and not stopper.should_stop:
+            with self._thread_lock:
                 info_dict = self._model.act_iteration()
-
+                """
                 if "traj_rewards" in info_dict:
                     rewards = info_dict["traj_rewards"]
                     if rewards:
@@ -193,11 +255,10 @@ class TrainingManager:
 
                         smoothed_reward = reduce(smooth(alpha), rewards)
 
-                    self._model.log_info("Running Average Reward %.2f" % smoothed_reward)
-
-                self._model.log_info("Agent completed a total of %d steps." % self._model.steps)
-
-                self._model.train_iteration(info_dict)
+                    tf.logging.info("Running Average Reward %.2f" % smoothed_reward)
+                """
+                if self._model.improve_iteration(info_dict):
+                    self.increment_improve_step()
 
                 TrainHook.run_hooks(self._during_train_hooks)
 

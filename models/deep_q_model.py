@@ -13,27 +13,31 @@ class DeepQModel(LearningModel):
                  model_scope,
                  agent,
                  improve_policy_modulo,
-                 steps_for_act_iter,
+                 delay_improvement,
+                 train_target_modulo,
+                 train_iterations,
                  replay_buffer,
                  sarsa_attrs_to_normalize,
-                 improve_target_modulo,
-                 iterations_of_improvement,
                  batch_size,
-                 train_sample_less):
+                 sample_less):
+
+        self._improve_policy_modulo = improve_policy_modulo
 
         self._replay_buffer = replay_buffer
 
-        self._improve_target_modulo = improve_target_modulo
+        self._train_target_modulo = train_target_modulo
 
-        self._iterations_of_improvement = iterations_of_improvement
+        self._train_iterations = train_iterations
 
         self._batch_size = batch_size
 
         self._sarsa_attrs_to_normalize = sarsa_attrs_to_normalize
 
-        self._train_sample_less = train_sample_less
+        self._sample_less = sample_less
 
-        self._norm_stats = None
+        self._delay_improvement = delay_improvement
+
+        self._num_target_train_steps = 0
 
         if not isinstance(agent, DeepQAgent):
             raise ValueError("Agent must be of type DeepQAgent but is %s" % type(agent))
@@ -41,25 +45,13 @@ class DeepQModel(LearningModel):
         super().__init__(graph,
                          environment,
                          model_scope,
-                         agent,
-                         improve_policy_modulo,
-                         steps_for_act_iter)
+                         agent)
     @property
     def replay_buffer(self):
         """ Allow read access to replay_buffer """
         return self._replay_buffer
 
-    @property
-    def steps(self):
-        """ Returns the number of steps the DQNAgent takes
-        """
-        return self._agent.total_steps
-
     def set_up_train(self):
-        dims = self._environment.dims
-
-        self._norm_stats = Sarsa.make_stats(normalize_attrs=self._sarsa_attrs_to_normalize,
-                                            **dims)
 
         self.add_session(self._agent)
 
@@ -84,37 +76,29 @@ class DeepQModel(LearningModel):
 
         traj_rewards = []
         env_dict = {"done" : True}
-        for _, env_dict in self._agent.act_for_steps(self._steps_for_act_iter, training=True):
-            sarsa = Sarsa.make_element_from_env(env_dict)
 
-            Sarsa.update_normalize_stats(self._norm_stats, sarsa)
+        for env_dict in self._agent.act_for_trajs(self._train_target_modulo, training=True):
+
+            sarsa = Sarsa.make_element_from_env(env_dict)
 
             self._replay_buffer.push(sarsa)
 
-            if env_dict["done"]:
-                traj_rewards.append(self._agent.traj_reward)
+        return {}
 
-        if not env_dict["done"]:
-            traj_rewards.append(self._agent.traj_reward)
-
-        return {"steps" : self.steps, "traj_rewards" : traj_rewards}
-
-    def train_iteration(self, info_dict):
+    def improve_iteration(self, info_dict):
         """ Determines whether to update policy or target based on step count """
-        step = info_dict["steps"]
 
-        if step % self._improve_policy_modulo == 0:
-            self._agent.improve_policy()
+        if self._agent.num_traj > self._delay_improvement:
 
-        # TODO these both might run...not sure if this is correct
-        if step % self._improve_target_modulo == 0:
-            for _ in range(self._iterations_of_improvement):
+            for _ in range(self._train_iterations):
                 batch = self._replay_buffer.random_sample(self._batch_size,
-                                                          sample_less=self._train_sample_less)
+                                                          sample_less=self._sample_less)
 
-                reduced_sarsa = Sarsa.stack(batch)
-                normalized_sarsa = Sarsa.normalize_element(self._norm_stats,
-                                                           self.steps,
-                                                           reduced_sarsa)
-
+                normalized_sarsa = Sarsa.stack(batch, self._sarsa_attrs_to_normalize)
                 self._agent.improve_target(normalized_sarsa)
+                self._num_target_train_steps += 1
+
+            if self._num_target_train_steps % self._improve_policy_modulo == 0:
+                self._agent.improve_policy()
+                return True
+        return False

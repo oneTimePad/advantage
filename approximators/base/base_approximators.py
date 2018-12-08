@@ -6,6 +6,7 @@ from advantage.utils.proto_parsers import parse_which_one
 from advantage.utils.tf_utils import build_init_uninit_op, strip_and_replace_scope
 from advantage.approximators.base.utils import parse_optimizer
 from advantage.approximators.base.output import Output
+from advantage.exception import AdvantageError
 
 
 """ Approximators for Approximate Reinforcement Learning
@@ -87,9 +88,11 @@ def deep_approximator(cls):
 
             self._learning_rate = config.learning_rate
 
+            name_scope = approximator_scope.name_scope
+
             optimizer = parse_optimizer(config.optimizer)
 
-            self._optimizer = optimizer(approximator_scope.name_scope)(self._learning_rate)
+            self._optimizer = optimizer(name_scope)(self._learning_rate)
 
             self._loss = None
             self._applied_gradients = None

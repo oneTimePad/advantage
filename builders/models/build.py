@@ -11,12 +11,11 @@ import advantage.models
 """
 
 
-def build_model(models_config, environment, info_log_frequency, is_training):
+def build_model(models_config, environment, is_training):
     """ Builds a Model based on configuration
             Args:
                 models_config: configuration from protobuf
                 environment: OpenAI Gym Gym object
-                info_log_frequency : frequency to log in steps
                 is_training: whether we are building a model
                     for training
 
@@ -48,30 +47,22 @@ def build_model(models_config, environment, info_log_frequency, is_training):
 
     agent = build_agent(graph,
                         environment,
-                        info_log_frequency,
                         model_scope,
                         is_training,
                         agents_config)
-
-    agent.info_log_frequency = info_log_frequency
 
     model = partial(model,
                     graph,
                     environment,
                     model_scope,
-                    agent,
-                    models_config.improve_policy_modulo,
-                    models_config.steps_for_act_iter)
+                    agent)
 
     specific_model_config = getattr(models_config,
                                     parse_which_one(models_config, "model"))
 
-    built_model = model_builder(model,
-                                environment,
-                                model_scope,
-                                agent,
-                                specific_model_config,
-                                is_training)
-
-    built_model.info_log_frequency = info_log_frequency
-    return built_model
+    return model_builder(model,
+                         environment,
+                         model_scope,
+                         agent,
+                         specific_model_config,
+                         is_training)

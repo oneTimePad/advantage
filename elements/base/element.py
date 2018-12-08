@@ -36,12 +36,13 @@ class NumpyElementMixin:
                        metadata={"np_attr" : True})
 
     @classmethod
-    def stack(cls, element_list):
+    def stack(cls, element_list, normalize_attrs=()):
         """ Combines common np_attrs in the elements in the list
         into one np_attr (stacked np.ndarray)
 
             Args:
                 element_list: list of BufferElement's to reduce
+                normalize_attrs: attrs to normalize just in stack
 
             Returns:
                 reduced Element
@@ -63,7 +64,28 @@ class NumpyElementMixin:
 
         np_attrs_dict_stacked = {k: np.vstack(v) for k, v in np_attrs_dict.items()}
 
+        if normalize_attrs:
+            attrs_to_normalize = filter(lambda x: x.name in normalize_attrs, cls.__attrs_attrs__)
+
+            for attribute in attrs_to_normalize:
+                attr_name = attribute.name
+                np_attrs_dict_stacked[attr_name] = cls.normalize(np_attrs_dict_stacked[attr_name])
+
         return cls.make_element_from_dict(np_attrs_dict_stacked)
+
+    @staticmethod
+    def normalize(stack, eps=0.01):
+        """ Normalize `stacked` element
+
+                Args:
+                    stack: stack to normalize
+                    eps: min bound for variance
+
+                Returns:
+                    normalized stack
+        """
+        return (stack - stack.mean()) / np.maximum(stack.std(), np.sqrt(eps))
+
 
 
 
@@ -71,6 +93,7 @@ class NormalizingElementMixin:
     """Mixin for a Element that allows for Normalization of some or all
     of it's attributes. A lot RL algorithms utilizing Approximators require
     Normalization of their inputs
+    This is for RUNNING Normalization (use NumpyElementMixin for batch-wise normalizing)
     """
 
     @staticmethod
@@ -105,9 +128,6 @@ class NormalizingElementMixin:
                 ValueError: missing attrs, or bad attrs
         """
 
-        if not normalize_attrs:
-            raise ValueError("normalize_attrs expects some attrs to normalize")
-
         if not hasattr(cls, "make_element_zero"):
             raise ValueError("Mixin expects subclass to contain attribute make_element_zero, \
                 should subclass Element")
@@ -121,14 +141,15 @@ class NormalizingElementMixin:
 
         normalizing = {}
 
-        attrs_to_normalize = filter(lambda x: x.name in normalize_attrs, cls.__attrs_attrs__)
+        if normalize_attrs:
+            attrs_to_normalize = filter(lambda x: x.name in normalize_attrs, cls.__attrs_attrs__)
 
-        for attribute in attrs_to_normalize:
-            attr_name = attribute.name
-            normalizing[attr_name] = (getattr(cls.make_element_zero(**kwargs_to_make_element_zero),
-                                              attr_name),
-                                      getattr(cls.make_element_zero(**kwargs_to_make_element_zero),
-                                              attr_name))
+            for attribute in attrs_to_normalize:
+                attr_name = attribute.name
+                normalizing[attr_name] = (getattr(cls.make_element_zero(**kwargs_to_make_element_zero),
+                                                  attr_name),
+                                          getattr(cls.make_element_zero(**kwargs_to_make_element_zero),
+                                                  attr_name))
         return normalizing
 
     @staticmethod
