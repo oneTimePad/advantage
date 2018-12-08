@@ -237,26 +237,12 @@ class TrainingManager:
 
         tf.logging.set_verbosity(tf.logging.INFO)
 
-        #alpha = self._config.average_smoothing
-        #smoothed_reward = 0
-
         tf.summary.FileWriter(self._model.checkpoint_dir_path, self._model.graph)
-
-        #smooth = lambda factor: lambda cur, new, f=factor: f * cur + (1. - f) * new
 
         while self.improve_step_value < self._improve_for_steps and not stopper.should_stop:
             with self._thread_lock:
                 info_dict = self._model.act_iteration()
-                """
-                if "traj_rewards" in info_dict:
-                    rewards = info_dict["traj_rewards"]
-                    if rewards:
-                        alpha = alpha if smoothed_reward else float(0)
 
-                        smoothed_reward = reduce(smooth(alpha), rewards)
-
-                    tf.logging.info("Running Average Reward %.2f" % smoothed_reward)
-                """
                 if self._model.improve_iteration(info_dict):
                     self.increment_improve_step()
 

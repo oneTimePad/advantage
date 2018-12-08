@@ -61,8 +61,9 @@ class Logger(threading.Thread):
             # can't be called (i.e. trainer won't call act_iteration)
             if self._logging_event.is_set():
                 for log in self.loggers.values():
-                    if str(log):
-                        tf.logging.info(log)
+                    log_str = str(log)
+                    if log_str:
+                        tf.logging.info(" " + log_str)
             self._logging_sleep_cond.release()
 
     @classmethod
