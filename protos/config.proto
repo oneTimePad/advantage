@@ -15,7 +15,7 @@ message Config {
     required string checkpoint_dir_path = 4;
     required string checkpoint_file_prefix = 5;
 
-    required int64 run_for_steps = 6;
+    required int64 improve_for_steps = 6;
 
     optional int64 info_log_frequency = 7 [default=100];
 

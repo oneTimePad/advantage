@@ -13,12 +13,9 @@ message Models {
 
     required Agents agent = 2;
 
-    required int64 improve_policy_modulo = 4;
-    required int64 steps_for_act_iter = 5;
+    required string name_scope = 3;
 
-    required string name_scope = 6;
-
-    optional bool reuse = 7 [default = false];
+    optional bool reuse = 4 [default = false];
 
 
 

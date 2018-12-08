@@ -2,10 +2,37 @@ from functools import reduce
 from contextlib import ExitStack
 import tensorflow as tf
 import os
-import itertools
 
 """ TensorFlow related utils
 """
+
+def get_or_create_improve_step(scope):
+    """ Gets or Creates the `improve_step`
+    variable, representing improvements in the
+    model
+
+        Returns:
+            tf variable for `improve_step`
+    """
+    with scope(graph_only=True):
+        with tf.variable_scope("", reuse=tf.AUTO_REUSE):
+            return tf.get_variable("improve_step",
+                                   shape=(),
+                                   initializer=tf.zeros_initializer(),
+                                   trainable=False,
+                                   dtype=tf.int32)
+
+def create_improve_step_update_op(scope, improve_step):
+    """ Creates the increment op for `improve_step`
+
+            Args:
+                scope: ScopeWrap
+                improve_step: tf.Variable from `get_or_create_improve_step`
+            Returns: TF op for incrementing
+    """
+    with scope(graph_only=True):
+        with tf.variable_scope("", reuse=tf.AUTO_REUSE):
+            return tf.assign(improve_step, improve_step + 1, name="increment_improve_step")
 
 
 def build_init_uninit_op(session, variables):
@@ -53,19 +80,20 @@ class ScopeWrap:
         self._graph = graph
         self._reuse = reuse
 
-    def __call__(self):
+    def __call__(self, graph_only=False):
         """ Combines graph and var_scope into one
         Context Manager
         """
         ctx = ExitStack()
         ctx.enter_context(self._graph.as_default())
-        if not self._scope:
-            self._scope = ctx.enter_context(tf.variable_scope(self._name,
-                                                              reuse=self._reuse))
+        if not graph_only:
+            if not self._scope:
+                self._scope = ctx.enter_context(tf.variable_scope(self._name,
+                                                                  reuse=self._reuse))
 
-        else:
-            ctx.enter_context(tf.variable_scope(self._scope, auxiliary_name_scope=False))
-            ctx.enter_context(tf.name_scope(self._scope.original_name_scope))
+            else:
+                ctx.enter_context(tf.variable_scope(self._scope, auxiliary_name_scope=False))
+                ctx.enter_context(tf.name_scope(self._scope.original_name_scope))
 
         return ctx
 

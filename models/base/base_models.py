@@ -14,18 +14,16 @@ class LearningModel(metaclass=ABCMeta):
                  graph,
                  environment,
                  model_scope,
-                 agent,
-                 improve_policy_modulo,
-                 steps_for_act_iter,
-                 **kwargs):
+                 agent):
+
         self._agent = agent
         self._environment = environment
         self._model_scope = model_scope
-        self._improve_policy_modulo = improve_policy_modulo
-        self._steps_for_act_iter = steps_for_act_iter
-        self.info_log_frequency = None
+
         self._graph = graph
         self._sessions = []
+
+        self._restore_session = None
 
     @property
     def graph(self):
@@ -52,25 +50,20 @@ class LearningModel(metaclass=ABCMeta):
         return self._model_scope.name_scope
 
     @property
-    @abstractmethod
-    def steps(self):
-        """ Returns number of steps done in total
-            steps is used by the runner to determine when to stop
-            It is up to the model to determine it's interpretation
+    def restore_session(self):
+        """ property for `restore_session`
         """
-        raise NotImplementedError()
+        if not isinstance(self._restore_session, tf.Session):
+            raise AttributeError("`restore_session must be set by model instance")
+        return self._restore_session
 
-    def log_info(self, msg):
-        """ Allows for `LearningModel`
-        to log
-
-            Args:
-                msg: message to log
+    @restore_session.setter
+    def restore_session(self, session):
+        """ Setter for we can make a property that
+        validates. Thus keeping the real value
+        protected
         """
-        should_log = self.steps % self.info_log_frequency == 0
-        tf.logging.log_if(tf.logging.INFO,
-                          msg,
-                          should_log)
+        self._restore_session = session
 
     def add_session(self, agent):
         """ Adds session to agent
@@ -113,12 +106,15 @@ class LearningModel(metaclass=ABCMeta):
     def act_iteration(self):
         """ Single acting iteration of the agent(s) with setup
                 Returns:
-                    info to be passed to train_iteration
+                    info to be passed to train_iteration (if needed)
          """
         raise NotImplementedError()
 
     @abstractmethod
-    def train_iteration(self, info_dict):
-        """ Single training iteration of the agent(s)
+    def improve_iteration(self, info_dict):
+        """ Single improve/training iteration of the agent(s)
+
+            returns: True/False whether improve_steps should be incremented
+            (did improvement actually happen)
         """
         raise NotImplementedError()

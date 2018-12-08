@@ -28,7 +28,7 @@ message Approximators {
 
     optional Optimizer optimizer = 5;
 
-    optional float learning_rate = 6;
+    required float learning_rate = 6;
 
     oneof output {
         Value value = 7;

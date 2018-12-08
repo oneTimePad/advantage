@@ -100,7 +100,7 @@ class Infer:
         """
         if not env:
             env = build_environment(config.environment)
-        model = build_model(config.model, env, config.info_log_frequency, False)
+        model = build_model(config.model, env, False)
         model.checkpoint_dir_path = config.checkpoint_dir_path
         model.checkpoint_file_prefix = config.checkpoint_file_prefix
 

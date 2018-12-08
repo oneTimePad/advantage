@@ -5,6 +5,7 @@ import numpy as np
 import tensorflow as tf
 from abc import ABCMeta
 from abc import abstractmethod
+import advantage.loggers as loggers
 
 class LearningAgent(metaclass=ABCMeta):
     """ Represents the general Learning (model-free) Reinforcement Learning
@@ -29,7 +30,8 @@ class LearningAgent(metaclass=ABCMeta):
         self._state = None
         self._total_steps = 0 # total number of steps gone
         self._traj_steps = 0 # current steps for trajectory
-        self._traj_reward = 0 # current trajectory reward
+        self._num_traj = 0 # total number of trajectories completed
+        self._traj_reward = -1 # current trajectory reward
         self._dis_traj_reward = 0 # current discounted trajectory reward
         self._discount_factor = discount_factor
         self._graph = graph
@@ -48,6 +50,12 @@ class LearningAgent(metaclass=ABCMeta):
         """ _traj_reward property
         """
         return self._traj_reward
+
+    @property
+    def num_traj(self):
+        """ _num_traj property
+        """
+        return self._num_traj
 
     @property
     def dis_traj_reward(self):
@@ -161,18 +169,6 @@ class LearningAgent(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    def log_info(self, msg):
-        """ Allows for `LearningAgent`
-        to log
-
-            Args:
-                msg: message to log
-        """
-        should_log = self.total_steps %  self.info_log_frequency == 0
-        tf.logging.log_if(tf.logging.INFO,
-                          msg,
-                          should_log)
-
     def act_in_env(self, training):
         """ Agent acts in the environment
             Args:
@@ -190,6 +186,7 @@ class LearningAgent(metaclass=ABCMeta):
             self._dis_traj_reward = 0.
             self._traj_reward = 0.
             self._traj_steps = 0
+            self._num_traj += 1
 
         prev_state = self._state
         conditional_policy = self.evaluate_policy(prev_state)
@@ -214,13 +211,31 @@ class LearningAgent(metaclass=ABCMeta):
                     training: whether the agent is training
 
                 Yields:
-                    step number [starting at 1], return value of act_in_env
+                     return value of act_in_env
 
         """
-        for step in range(1, num_steps + 1):
-            yield (step, self.act_in_env(training))
+        for _ in range(1, num_steps + 1):
+            yield self.act_in_env(training)
 
-    def run_trajectory(self):
+    def act_for_trajs(self, num_traj, training):
+        """ Generator Agent acts in environment until
+        completing a specified number of trajectories
+            Args:
+                num_steps: maximum number of trajectories to act
+                for
+                training: whether training
+            Yields:
+                return value of act_in_env
+        """
+        for _ in range(1, num_traj + 1):
+            yield from self.run_trajectory(training)
+
+    @loggers.avg("Agent average trajectory reward is %.2f",
+                 loggers.LogVarType.INSTANCE_ATTR,
+                 "traj_reward",
+                 (loggers.LogVarType.RETURNED_DICT, "done", lambda done: done),
+                 tensorboard=True)
+    def run_trajectory(self, training=False):
         """ Generator: Runs a trajectory. This means the agent
         acts until a termination signal from the environment
         is received. Not for training.
@@ -229,11 +244,11 @@ class LearningAgent(metaclass=ABCMeta):
         """
         terminate = False
         while not terminate:
-            env_info = self.act_in_env(False)
+            env_info = self.act_in_env(training)
             terminate = bool(env_info["done"])
             yield env_info
 
-    def run_trajectory_through(self):
+    def run_trajectory_through(self, training=False):
         """ Runs the traject until complete returning no info
         during run.
 
@@ -241,7 +256,7 @@ class LearningAgent(metaclass=ABCMeta):
                 number of steps agent went through
         """
         steps = 0
-        while not self.act_in_env(False)["done"]:
+        while not self.act_in_env(training)["done"]:
             steps += 1
         return steps
 

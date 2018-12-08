@@ -11,10 +11,16 @@ message DeepQModel {
 
     required Sarsa sarsa = 4;
 
-    required int64 improve_target_modulo = 5;
-    required int64 iterations_of_improvement = 6;
 
-    required int64 batch_size = 7;
+    required int64 train_target_modulo = 5; // train target every X trajectories completed by policy
 
-    required bool train_sample_less = 8 [default=false];
+    required int64 train_iterations = 6; // iterations of training every X trajectories
+
+    required int64 batch_size = 7; // training batch size
+
+    required int64 improve_policy_modulo= 8; // improve policy after Y training steps
+
+    required bool sample_less = 9 [default=false]; // sample less for batch size
+
+    optional int64 delay_improvement = 10 [default=0]; // number of trajectories to delay policy improvement/target training for
 }

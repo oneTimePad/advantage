@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import attr
 from advantage.elements import Sarsa
+from advantage.utils.tf_utils import get_or_create_improve_step
 
 """ Computes various RL special values
 """
@@ -76,10 +77,10 @@ def decayed_epsilon(agent,
         Returns:
             callable that returns epsilon value
     """
+    improve_step = get_or_create_improve_step(agent.agent_scope)
     with agent.agent_scope():
-        global_step = tf.train.get_or_create_global_step()
         eps = tf.train.exponential_decay(epsilon.init,
-                                         global_step,
+                                         improve_step,
                                          epsilon.decay_steps,
                                          epsilon.decay_rate,
                                          staircase=True,
@@ -90,7 +91,7 @@ def decayed_epsilon(agent,
 
         eps_runtime = agent.session.run(eps)
 
-        agent.log_info("Agent Epsilon value %.2f" % eps_runtime)
+        #agent.log_info("Agent Epsilon value %.2f" % eps_runtime)
 
         return eps_runtime if eps_runtime > min_epsilon else min_epsilon
 
