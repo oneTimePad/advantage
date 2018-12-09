@@ -15,7 +15,7 @@ Planned additions:
 ### Training
 ``` python
 import advantage as adv
-agent = adv.make("{path_to}/samples/dqn_test.config")
+agent = adv.make("{path_to}/samples/dqn.config")
 agent.train()
 ````
 
