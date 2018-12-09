@@ -15,7 +15,7 @@ Planned additions:
   - Multi-agent
   
 ### Dependencies 
-These are the tested dependencies. Although higher version will probably work.
+These are the tested dependencies. Although higher versions will probably work.
 ```
 tensorflow==1.10.0 
 gym
