@@ -11,6 +11,13 @@ Planned additions:
      - Evolved Policy Gradients
      - Proximal Policy Optimization
   - Multi-agent
+  
+### Installing
+```
+git clone https://github.com/oneTimePad/advantage.git
+
+export PYTHONPATH=$PYTHONPATH:{path_to_advantage_package}
+```
 
 ### Training
 ``` python
