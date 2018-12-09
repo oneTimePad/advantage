@@ -43,7 +43,7 @@ with agent.infer() as infer:
     for _ in infer.run_trajectory(run_through=False):
         env.render()
 ```
-Reusable Session: Open with `.reuse()` to 
+Open with `.reuse()` to 
 open a reusable inference session that isn't closed
 on __exit__.
 ``` python
