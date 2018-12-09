@@ -24,4 +24,4 @@ with agent.infer() as infer:
         env.render()
 ```
 
-If there are any problems with the learning algorithm plese open an issue
+If there are any problems with the learning algorithm please open an issue
