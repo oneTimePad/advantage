@@ -275,18 +275,19 @@ def deep_approximator(cls):
 
             network_params = network.trainable_parameters_dict
 
-            network_params_runtime = session.run(network_params)
+            def copy_op():
+                network_params_runtime = session.run(network_params)
 
-            replaced_scope = {strip_and_replace_scope(self.name_scope, k, suffix_start) :
-                              v for k, v in network_params_runtime.items()}
-            try:
-                feed_dict = {v[0] : replaced_scope[k] for k, v in self._copy_ops.items()}
-            except KeyError:
-                raise ValueError("There was a problem attempting to copy network params!"
-                                 " Are the networks both the same structure?")
+                replaced_scope = {strip_and_replace_scope(self.name_scope, k, suffix_start) :
+                                  v for k, v in network_params_runtime.items()}
+                try:
+                    feed_dict = {v[0] : replaced_scope[k] for k, v in self._copy_ops.items()}
+                except KeyError:
+                    raise ValueError("There was a problem attempting to copy network params!"
+                                     " Are the networks both the same structure?")
+                session.run(ops, feed_dict=feed_dict)
 
-            return lambda: session.run(ops, feed_dict=feed_dict)
-
+            return copy_op
 
         def initialize(self, session):
             """ Initialize all network variables

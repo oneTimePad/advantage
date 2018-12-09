@@ -170,7 +170,23 @@ class TrainingManager:
         self._tf_increment_improve_step = create_improve_step_update_op(self._model.model_scope,
                                                                         self._tf_improve_step)
 
+        thread_event = threading.Event()
+        thread_sleep_cond = threading.Condition(self._thread_lock)
+        self._thread_event = thread_event
+        self._thread_sleep_cond = thread_sleep_cond
+
+        file_writer = tf.summary.FileWriter(self._model.checkpoint_dir_path, self._model.graph)
+
+        self._logger = Logger(self._model.model_scope,
+                              thread_event,
+                              thread_sleep_cond,
+                              self._logger_freq_sec,
+                              file_writer)
+
+        # performs variable initialization
         self._model.set_up_train()
+
+        self._logger.session = self._model.restore_session
 
         TrainHook.set_up_hooks(self._before_train_hooks)
         TrainHook.set_up_hooks(self._during_train_hooks)
@@ -198,27 +214,15 @@ class TrainingManager:
         """ Performs start up procedures
         """
 
-        thread_event = threading.Event()
-        thread_sleep_cond = threading.Condition(self._thread_lock)
-        thread_event.set()
-        self._thread_event = thread_event
-        self._thread_sleep_cond = thread_sleep_cond
-
-        file_writer = tf.summary.FileWriter(self._model.checkpoint_dir_path, self._model.graph)
-
-        self._logger = Logger(self._model.graph,
-                              thread_event,
-                              thread_sleep_cond,
-                              self._logger_freq_sec,
-                              file_writer)
+        self._thread_event.set()
 
         self._logger.start()
 
         self._logger_thread_started = True
 
         try:
-            self._model.start_checkpoint_system(thread_event,
-                                                thread_sleep_cond)
+            self._model.start_checkpoint_system(self._thread_event,
+                                                self._thread_sleep_cond)
             self._checkpoint_thread_started = True
 
         except AttributeError:

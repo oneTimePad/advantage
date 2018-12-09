@@ -319,6 +319,7 @@ class OffPolicyValueAgent(LearningAgent, metaclass=ABCMeta):
             raise ValueError("Epsilon must be in (0, 1.0]")
 
         prob = random.random()
+
         return sampled_action if prob > eps else self.action_space.sample()
 
     def sample_action(self, conditional_policy, training):

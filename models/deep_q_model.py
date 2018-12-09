@@ -86,14 +86,17 @@ class DeepQModel(LearningModel):
         """ Determines whether to update policy or target based on step count """
 
         if self._agent.num_traj > self._delay_improvement:
+            if self._agent.num_traj % self._train_target_modulo == 0:
+                #print(self._agent.num_traj)
+                for _ in range(self._train_iterations):
+                    #print("BEGIN: ",self._batch_size, self._replay_buffer.len)
+                    batch = self._replay_buffer.random_sample_and_pop(self._batch_size,
+                                                                      sample_less=self._sample_less)
 
-            for _ in range(self._train_iterations):
-                batch = self._replay_buffer.random_sample(self._batch_size,
-                                                          sample_less=self._sample_less)
-
-                normalized_sarsa = Sarsa.stack(batch, self._sarsa_attrs_to_normalize)
-                self._agent.improve_target(normalized_sarsa)
-                self._num_target_train_steps += 1
+                    normalized_sarsa = Sarsa.stack(batch, self._sarsa_attrs_to_normalize)
+                    self._agent.improve_target(normalized_sarsa)
+                    self._num_target_train_steps += 1
+                #print("END: ",self._batch_size, self._replay_buffer.len)
 
             if self._num_target_train_steps % self._improve_policy_modulo == 0:
                 self._agent.improve_policy()

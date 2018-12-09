@@ -51,6 +51,24 @@ class LogVarType:
     INSTANCE_ATTR = "instance_attr" # or is an instance attribute of the method
 
 
+def make_log_step(scope):
+    """ Makes log_step variable
+    counter
+        Args:
+            scope: model ScopeWrap
+
+        Returns:
+            update op for log_step
+    """
+    with scope(graph_only=True):
+        with tf.variable_scope("", reuse=tf.AUTO_REUSE):
+            log_step = tf.get_variable("log_step",
+                                       shape=(),
+                                       initializer=tf.zeros_initializer(),
+                                       trainable=False,
+                                       dtype=tf.int32)
+            return log_step, tf.assign(log_step, log_step + 1, name="increment_log_step")
+
 class Logger(threading.Thread):
     """ The logging manager that
     logs LogElement's in loggers periodically.
@@ -61,16 +79,19 @@ class Logger(threading.Thread):
     _loggers_unique_id = 0
 
     def __init__(self,
-                 graph,
+                 scope,
                  logging_event,
                  logging_sleep_cond,
                  logging_freq_sec,
                  file_writer):
-        self._graph = graph
+        self._scope = scope
+        self.session = None
         self._logging_event = logging_event
         self._logging_sleep_cond = logging_sleep_cond
         self._logging_freq_sec = logging_freq_sec
-        self._log_step = 0
+        log_step, log_step_update = make_log_step(scope)
+        self._log_step = log_step
+        self._log_step_update = log_step_update
         self._file_writer = file_writer
 
         super().__init__(target=self._log, group=None)
@@ -91,7 +112,8 @@ class Logger(threading.Thread):
             # since we have the lock `update_vars`
             # can't be called (i.e. trainer won't call act_iteration)
             if self._logging_event.is_set():
-                print("------------%s------------" % datetime.now())
+                step = self.session.run(self._log_step)
+                print("%d ------------%s------------" % (step, datetime.now()))
                 for log in self.loggers.values():
                     if log.to_stdout:
                         log_str = str(log)
@@ -99,10 +121,10 @@ class Logger(threading.Thread):
                             tf.logging.info(" " + log_str)
 
                     if log.to_tensorboard and log.var:
-                        self._file_writer.add_summary(log.var, self._log_step)
+                        self._file_writer.add_summary(log.var, step)
                 self._file_writer.flush()
 
-            self._log_step += 1
+            self.session.run(self._log_step_update)
             self._logging_sleep_cond.release()
 
     @classmethod
