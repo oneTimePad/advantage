@@ -18,6 +18,7 @@ Planned additions:
 These are the tested dependencies. Although higher version will probably work.
 ```
 tensorflow==1.10.0 
+gym
 python3.5.2 
 ```
   
@@ -58,5 +59,8 @@ with infer_session.reuse() as infer:
     for _ in infer.run_trajectory(run_through=False):
         env.render()
 ```
+
+### Samples
+Please check out the sample CartPole-v0 notebook under samples
 
 If there are any problems with the learning algorithm please open an issue
