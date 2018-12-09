@@ -26,10 +26,12 @@ class GymEnvironment(Environment):
     def reset(self):
         return self._gym.reset()
 
-    def render(self):
+    def render(self, mode=None):
         """ Renders Gym
         """
-        self._gym.render()
+        if mode:
+            return self._gym.render(mode=mode)
+        return self._gym.render()
 
     @property
     def action_space(self):
