@@ -14,10 +14,11 @@ Planned additions:
      - Proximal Policy Optimization
   - Multi-agent
   
-### Dependencies
+### Dependencies 
+These are the tested dependencies. Although higher version will probably work.
 ```
-tensorflow==1.10.0
-python3.5.2
+tensorflow==1.10.0 
+python3.5.2 
 ```
   
 ### Installing
