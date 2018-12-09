@@ -23,3 +23,5 @@ with agent.infer() as infer:
     for _ in infer.run_trajectory(run_through=False):
         env.render()
 ```
+
+If there are any problems with the learning algorithm plese open an issue
