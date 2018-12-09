@@ -11,3 +11,18 @@ Planned additions:
      - Evolved Policy Gradients
      - Proximal Policy Optimization
   - Multi-agent
+
+### Training
+``` python
+import advantage as adv
+agent = adv.make("{path_to}/samples/dqn_test.config")
+agent.train()
+````
+
+### Inference
+``` python
+with agent.infer() as infer:
+    env = infer.env
+    for _ in infer.run_trajectory(run_through=False):
+        env.render()
+```
