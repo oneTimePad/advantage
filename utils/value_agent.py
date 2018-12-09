@@ -3,6 +3,7 @@ import numpy as np
 import attr
 from advantage.elements import Sarsa
 from advantage.utils.tf_utils import get_or_create_improve_step
+import advantage.loggers as loggers
 
 """ Computes various RL special values
 """
@@ -86,12 +87,15 @@ def decayed_epsilon(agent,
                                          staircase=True,
                                          name="decayed_epsilon")
     min_epsilon = epsilon.min
+
+    @loggers.value("Agent current epsilon is %.2f",
+                   loggers.LogVarType.RETURNED_VALUE,
+                   "epsilon",
+                   tensorboard=True)
     def fetch_eps():
         nonlocal agent, min_epsilon
 
         eps_runtime = agent.session.run(eps)
-
-        #agent.log_info("Agent Epsilon value %.2f" % eps_runtime)
 
         return eps_runtime if eps_runtime > min_epsilon else min_epsilon
 

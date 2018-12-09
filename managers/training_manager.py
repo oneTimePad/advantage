@@ -7,6 +7,7 @@ from advantage.utils.proto_parsers import parse_hooks
 from advantage.builders import build_model, build_environment
 from advantage.utils.tf_utils import get_or_create_improve_step, create_improve_step_update_op
 from advantage.loggers.logger import Logger
+import advantage.loggers as loggers
 
 """ All necessary classes for running the training process
 for an RL model
@@ -132,8 +133,8 @@ class TrainingManager:
 
         self._stopper = stopper
 
-        self.increment_improve_step = None
-        self._improve_step_value_fetch = lambda: None
+        self._tf_increment_improve_step = None
+        self._tf_improve_step = None
 
         self._thread_event = None
         self._thread_sleep_cond = None
@@ -150,19 +151,22 @@ class TrainingManager:
         """ property for fetching runtime
         value of `improve_step`
         """
-        return self._improve_step_value_fetch()
+        return self._model.restore_session.run(self._tf_improve_step)
+
+    @loggers.value("Model has completed %d improvement steps",
+                   loggers.LogVarType.INSTANCE_ATTR,
+                   "improve_step_value")
+    def _increment_improve_step(self):
+        self._model.restore_session.run(self._tf_increment_improve_step)
 
 
     def set_up(self):
         """ builds all necessary dependencies for training
         """
-        improve_step = get_or_create_improve_step(self._model.model_scope) # created here
+        self._tf_improve_step = get_or_create_improve_step(self._model.model_scope) # created here
 
-        increment_improve_step = create_improve_step_update_op(self._model.model_scope,
-                                                               improve_step)
-
-        self.increment_improve_step = lambda model=self._model: model.restore_session.run(increment_improve_step)
-        self._improve_step_value_fetch = lambda model=self._model: model.restore_session.run(improve_step)
+        self._tf_increment_improve_step = create_improve_step_update_op(self._model.model_scope,
+                                                                        self._tf_improve_step)
 
         self._model.set_up_train()
 
@@ -221,7 +225,6 @@ class TrainingManager:
                              " Checkpointing System wasn't setup properly!")
             raise Exception("Failed to start checkpoint system")
 
-
     def train_model(self):
         """ Runs the actually training process.
             The model's act_iteration evaluates the agent(s)
@@ -244,7 +247,7 @@ class TrainingManager:
                 info_dict = self._model.act_iteration()
 
                 if self._model.improve_iteration(info_dict):
-                    self.increment_improve_step()
+                    self._increment_improve_step()
 
                 TrainHook.run_hooks(self._during_train_hooks)
 

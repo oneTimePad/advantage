@@ -74,9 +74,6 @@ class DeepQModel(LearningModel):
         """ Runs the agent and collects Sarsas to put in the replay buffer
         """
 
-        traj_rewards = []
-        env_dict = {"done" : True}
-
         for env_dict in self._agent.act_for_trajs(self._train_target_modulo, training=True):
 
             sarsa = Sarsa.make_element_from_env(env_dict)
