@@ -26,6 +26,10 @@ git clone https://github.com/oneTimePad/advantage.git
 
 export PYTHONPATH=$PYTHONPATH:{path_to_advantage_package}
 ```
+Build protobufs
+```
+{path_to_advantage}/scripts/build_protos.sh
+```
 
 ### Training
 ``` python
