@@ -108,6 +108,8 @@ def _logger(logger,
                                         first_arg)
             if predicate(when_value):
                 logger(extracted_value)
+        else:
+            logger(extracted_value)
 
     def wrap_func(*args, **kwargs):
 
@@ -159,3 +161,28 @@ def avg(func,
         Logger.update_var(var_name, new_var)
 
     return avg_logger
+
+@parameterized
+def value(func,
+          log_string,
+          var_type,
+          var_name,
+          when=(),
+          tensorboard=False):
+    """ Decorator for tracking averages
+
+        Args:
+            func: decorated method
+            log_string: format string for logging
+            var_type: LogVarType
+            var_name: tracked attr name
+            when: tuple(LogVarType, var_name, predicit_func)
+                used to determine when to call `avg_logger`
+            tensorboard: whether to log to tensorboard
+    """
+    @_logger(func, log_string, var_type, var_name, when)
+    def value_logger(ret_value):
+
+        Logger.update_var(var_name, ret_value)
+
+    return value_logger

@@ -1,3 +1,4 @@
+from datetime import datetime
 import threading
 import tensorflow as tf
 
@@ -60,6 +61,7 @@ class Logger(threading.Thread):
             # since we have the lock `update_vars`
             # can't be called (i.e. trainer won't call act_iteration)
             if self._logging_event.is_set():
+                print("------------%s------------" % datetime.now())
                 for log in self.loggers.values():
                     log_str = str(log)
                     if log_str:
