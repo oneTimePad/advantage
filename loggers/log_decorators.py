@@ -25,18 +25,24 @@ def extract_return(decorated,
                 for instance var logging only. This represents `self`
 
         Returns:
-            value fetched from `ret`
+            extracted value fetched from `ret`
 
         Raises:
             AttributeError on looking for an unknown instance attr
                 of dec_first_arg (which is supposed to be `self`)
     """
     if var_type == LogVarType.RETURNED_DICT:
-        value = ret[var_name]
+        if not var_name:
+            raise ValueError("For `var_type` RETURNED_DICT `var_name` must be specified")
+        extracted = ret[var_name]
+
     elif var_type == LogVarType.RETURNED_VALUE:
-        value = ret
+        extracted = ret
+
     elif var_type == LogVarType.INSTANCE_ATTR:
-        value = getattr(dec_first_arg, var_name, None)
+        if not var_name:
+            raise ValueError("For `var_type` INSTANCE_ATTR `var_name` must be specified")
+        extracted = getattr(dec_first_arg, var_name, None)
 
         if not value:
             raise AttributeError("`logger` decorator of %s"
@@ -46,7 +52,7 @@ def extract_return(decorated,
     else:
         raise ValueError("var_type must be value attribute of `LogVarType`")
 
-    return value
+    return extracted
 
 def _log_as_generator(gen, log, dec_first_arg):
     """ Used track values returned
@@ -67,10 +73,12 @@ def _log_as_generator(gen, log, dec_first_arg):
 @parameterized
 def _logger(logger,
             func,
-            log_string,
             var_type,
             var_name,
-            when):
+            log_string,
+            when,
+            stdout=True,
+            tensorboard=False):
     """ Marks a decorator as logger decorator
     This must decorate the `wrapping` function of
     the decorator NOT the decorator itself
@@ -80,21 +88,24 @@ def _logger(logger,
             func: the function/method that logger is wrapping
                 (i.e.) first arg passed to the decorator
                 for the `wrapping` function
-            log_string: format string to print while logging
             var_type: LogVarType
+            var_name: variable name
+            log_string: format string to print while logging
             when: tuple(LogVarType, var_name, predicit_func):
                 used to determing when to call `logger`
     """
 
     log_element = LogElement(log_string,
-                             var_name)
+                             var_name,
+                             stdout,
+                             tensorboard)
 
-    Logger.loggers.update({var_name: log_element})
+    var_name = Logger.add_logger(log_element)
 
-    def extract_and_track(value, first_arg):
+    def extract_and_track(ret_value, first_arg):
 
         extracted_value = extract_return(func,
-                                         value,
+                                         ret_value,
                                          var_type,
                                          var_name,
                                          first_arg)
@@ -102,14 +113,14 @@ def _logger(logger,
         if when:
             when_var_type, when_var_name, predicate = when
             when_value = extract_return(func,
-                                        value,
+                                        ret_value,
                                         when_var_type,
                                         when_var_name,
                                         first_arg)
             if predicate(when_value):
-                logger(extracted_value)
+                logger(var_name, extracted_value)
         else:
-            logger(extracted_value)
+            logger(var_name, extracted_value)
 
     def wrap_func(*args, **kwargs):
 
@@ -127,18 +138,19 @@ def _logger(logger,
 
 @parameterized
 def avg(func,
-        log_string,
         var_type,
-        var_name,
+        var_name=None,
+        log_string="",
         when=(),
+        stdout=True,
         tensorboard=False):
     """ Decorator for tracking averages
 
         Args:
             func: decorated method
-            log_string: format string for logging
             var_type: LogVarType
             var_name: tracked attr name
+            log_string: format string for logging
             when: tuple(LogVarType, var_name, predicit_func)
                 used to determine when to call `avg_logger`
             tensorboard: whether to log to tensorboard
@@ -146,8 +158,8 @@ def avg(func,
 
     count = 0
 
-    @_logger(func, log_string, var_type, var_name, when)
-    def avg_logger(ret_value):
+    @_logger(func, var_type, var_name, log_string, when, stdout, tensorboard)
+    def avg_logger(var_name, ret_value):
         nonlocal count
 
         count += 1
@@ -164,25 +176,25 @@ def avg(func,
 
 @parameterized
 def value(func,
-          log_string,
           var_type,
-          var_name,
+          var_name=None,
+          log_string="",
           when=(),
+          stdout=True,
           tensorboard=False):
     """ Decorator for tracking averages
 
         Args:
             func: decorated method
-            log_string: format string for logging
             var_type: LogVarType
             var_name: tracked attr name
+            log_string: format string for logging
             when: tuple(LogVarType, var_name, predicit_func)
                 used to determine when to call `avg_logger`
             tensorboard: whether to log to tensorboard
     """
-    @_logger(func, log_string, var_type, var_name, when)
-    def value_logger(ret_value):
-
+    @_logger(func, var_type, var_name, log_string, when, stdout, tensorboard)
+    def value_logger(var_name, ret_value):
         Logger.update_var(var_name, ret_value)
 
     return value_logger

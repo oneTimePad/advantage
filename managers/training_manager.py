@@ -153,12 +153,14 @@ class TrainingManager:
         """
         return self._model.restore_session.run(self._tf_improve_step)
 
-    @loggers.value("Model has completed %d improvement steps",
-                   loggers.LogVarType.INSTANCE_ATTR,
-                   "improve_step_value")
+    @loggers.value(loggers.LogVarType.INSTANCE_ATTR,
+                   "improve_step_value",
+                   "Model has completed %d improvement steps")
     def _increment_improve_step(self):
+        """ updates improvement step
+        by running TF op for updating
+        """
         self._model.restore_session.run(self._tf_increment_improve_step)
-
 
     def set_up(self):
         """ builds all necessary dependencies for training
@@ -202,9 +204,13 @@ class TrainingManager:
         self._thread_event = thread_event
         self._thread_sleep_cond = thread_sleep_cond
 
-        self._logger = Logger(thread_event,
+        file_writer = tf.summary.FileWriter(self._model.checkpoint_dir_path, self._model.graph)
+
+        self._logger = Logger(self._model.graph,
+                              thread_event,
                               thread_sleep_cond,
-                              self._logger_freq_sec)
+                              self._logger_freq_sec,
+                              file_writer)
 
         self._logger.start()
 
@@ -239,8 +245,6 @@ class TrainingManager:
         stopper = self._stopper
 
         tf.logging.set_verbosity(tf.logging.INFO)
-
-        tf.summary.FileWriter(self._model.checkpoint_dir_path, self._model.graph)
 
         while self.improve_step_value < self._improve_for_steps and not stopper.should_stop:
             with self._thread_lock:

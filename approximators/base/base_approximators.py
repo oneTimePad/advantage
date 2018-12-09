@@ -7,6 +7,7 @@ from advantage.utils.tf_utils import build_init_uninit_op, strip_and_replace_sco
 from advantage.approximators.base.utils import parse_optimizer
 from advantage.approximators.base.output import Output
 from advantage.exception import AdvantageError
+import advantage.loggers as loggers
 
 
 """ Approximators for Approximate Reinforcement Learning
@@ -56,6 +57,23 @@ def _produce_feed_dict(runtime_tensor_inputs, placeholders):
 
     return feed_dict
 
+
+def _avg_loss_summary(loss):
+    """ Creates average loss summary
+
+            Args:
+                loss: loss tensor
+    """
+    loss_avg = tf.train.ExponentialMovingAverage(0.9, name="moving_avg")
+
+    #get the moving average ops (create shadow variables)
+    loss_avg_op = loss_avg.apply([loss])
+
+    #log loss and shadow variables for avg loss
+    raw_sum = tf.summary.scalar(loss.op.name + " (raw)", loss)
+    avg_sum = tf.summary.scalar(loss.op.name, loss_avg.average(loss))
+    summary = tf.summary.merge([avg_sum, raw_sum])
+    return (summary, loss_avg_op)
 
 def deep_approximator(cls):
     """ Wraps the DeepApproximator interface
@@ -310,9 +328,10 @@ def deep_approximator(cls):
             with self._approximator_scope():
                 self._applied_gradients = gradients
                 global_step = tf.train.get_or_create_global_step()
-
-                self._train_op = self._optimizer.apply_gradients(gradients,
-                                                                 global_step=global_step)
+                summary, loss_avg = _avg_loss_summary(self._loss)
+                with tf.control_dependencies([loss_avg]):
+                    self._train_op = [summary, self._optimizer.apply_gradients(gradients,
+                                                                               global_step=global_step)]
 
         def minimize(self, loss):
             """ Short for minimizing loss
@@ -322,22 +341,30 @@ def deep_approximator(cls):
             with self._approximator_scope():
                 self._loss = loss
                 global_step = tf.train.get_or_create_global_step()
-                self._train_op = self._optimizer.minimize(loss,
-                                                          var_list=self.trainable_parameters,
-                                                          global_step=global_step)
+                summary, loss_avg = _avg_loss_summary(loss)
+                with tf.control_dependencies([loss_avg]):
+                    self._train_op = [summary, self._optimizer.minimize(loss,
+                                                                        var_list=self.trainable_parameters,
+                                                                        global_step=global_step)]
 
-
+        @loggers.value(loggers.LogVarType.RETURNED_VALUE,
+                       stdout=False,
+                       tensorboard=True)
         def update(self, session, runtime_inputs, runtime_targets):
             """ Perform a network parameter update
                     Args:
                         runtime_inputs: usually training batch inputs containg
                            placeholders and values runtime_targets: training batch targets
+
+                    Returns:
+                        tf summary
             """
             runtime_batch = {}
             runtime_batch.update(self._produce_input_feed_dict(runtime_inputs))
             runtime_batch.update(self._produce_target_feed_dict(runtime_targets))
 
-            session.run(self._train_op, feed_dict=runtime_batch)
+            results = session.run(self._train_op, feed_dict=runtime_batch)
+            return results[0] # summary
 
         def inference(self, session, runtime_tensor_inputs):
             """ Performs inference on runtime_tensor_inputs

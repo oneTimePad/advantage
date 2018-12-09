@@ -10,16 +10,35 @@ import tensorflow as tf
 class LogElement:
     """ Represents an attr to log
     """
-    def __init__(self, string, var_name):
+    def __init__(self,
+                 string,
+                 var_name,
+                 stdout,
+                 tensorboard):
         self._string = string
-        self._var_name = var_name
+        self.var_name = var_name
         self.var = None
+        self._stdout = stdout
+        self._tensorboard = tensorboard
 
     def __str__(self):
         if self.var:
             return self._string % self.var
         return ""
 
+    @property
+    def to_stdout(self):
+        """ property for determing
+        to log to stdout
+        """
+        return self._stdout
+
+    @property
+    def to_tensorboard(self):
+        """ property for determing
+        to log to tensorboard
+        """
+        return self._tensorboard
 
 # pylint: disable=too-few-public-methods
 # reason-disable: dataclass
@@ -39,17 +58,28 @@ class Logger(threading.Thread):
     in log_decorators
     """
     loggers = {}
+    _loggers_unique_id = 0
 
     def __init__(self,
+                 graph,
                  logging_event,
                  logging_sleep_cond,
-                 logging_freq_sec):
-
+                 logging_freq_sec,
+                 file_writer):
+        self._graph = graph
         self._logging_event = logging_event
         self._logging_sleep_cond = logging_sleep_cond
         self._logging_freq_sec = logging_freq_sec
+        self._log_step = 0
+        self._file_writer = file_writer
 
         super().__init__(target=self._log, group=None)
+
+    @property
+    def writer(self):
+        """ property for `_file_writer`
+        """
+        return self._file_writer
 
     def _log(self):
         """ logs periodically
@@ -63,10 +93,39 @@ class Logger(threading.Thread):
             if self._logging_event.is_set():
                 print("------------%s------------" % datetime.now())
                 for log in self.loggers.values():
-                    log_str = str(log)
-                    if log_str:
-                        tf.logging.info(" " + log_str)
+                    if log.to_stdout:
+                        log_str = str(log)
+                        if log_str:
+                            tf.logging.info(" " + log_str)
+
+                    if log.to_tensorboard and log.var:
+                        self._file_writer.add_summary(log.var, self._log_step)
+                self._file_writer.flush()
+
+            self._log_step += 1
             self._logging_sleep_cond.release()
+
+    @classmethod
+    def add_logger(cls, log_element):
+        """ Adds logger to dict of
+        loggers
+
+            Args:
+                log_element: LogElement to add
+
+            Returns:
+                correct `var_name`
+        """
+
+        if not log_element.var_name:
+            log_element.var_name = str(cls._loggers_unique_id)
+            cls._loggers_unique_id += 1
+
+        var_name = log_element.var_name
+        cls.loggers.update({var_name: log_element})
+
+        return var_name
+
 
     @classmethod
     def update_var(cls, var_name, new_value):

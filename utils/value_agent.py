@@ -88,10 +88,10 @@ def decayed_epsilon(agent,
                                          name="decayed_epsilon")
     min_epsilon = epsilon.min
 
-    @loggers.value("Agent current epsilon is %.2f",
-                   loggers.LogVarType.RETURNED_VALUE,
+    @loggers.value(loggers.LogVarType.RETURNED_VALUE,
                    "epsilon",
-                   tensorboard=True)
+                   "Agent current epsilon is %.2f",
+                   tensorboard=False)
     def fetch_eps():
         nonlocal agent, min_epsilon
 
