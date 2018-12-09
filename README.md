@@ -36,11 +36,19 @@ agent.train()
 
 ### Inference
 For Inference, the context manager `infer` opens up 
-an inference session. open with `.reuse()` to 
+an inference session. 
+``` python
+with agent.infer() as infer:
+    env = infer.env
+    for _ in infer.run_trajectory(run_through=False):
+        env.render()
+```
+Reusable Session: Open with `.reuse()` to 
 open a reusable inference session that isn't closed
 on __exit__.
 ``` python
-with agent.infer() as infer:
+infer_session = agent.infer()
+with infer_session.reuse() as infer:
     env = infer.env
     for _ in infer.run_trajectory(run_through=False):
         env.render()
