@@ -12,6 +12,12 @@ Planned additions:
      - Proximal Policy Optimization
   - Multi-agent
   
+### Dependencies
+```
+tensorflow==1.10.0
+python3.5.2
+```
+  
 ### Installing
 ```
 git clone https://github.com/oneTimePad/advantage.git
