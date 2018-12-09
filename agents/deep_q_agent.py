@@ -57,7 +57,7 @@ class DeepQAgent(OffPolicyValueAgent):
                                      axis=1)
 
             # the mean square error between target and network
-            loss = tf.reduce_mean(tf.square(target_plh - action_q))
+            loss = tf.reduce_mean(tf.square(target_plh - action_q), name="DeepQAgent_target_loss")
 
         self._target.minimize(loss)
 

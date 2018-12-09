@@ -230,11 +230,11 @@ class LearningAgent(metaclass=ABCMeta):
         for _ in range(1, num_traj + 1):
             yield from self.run_trajectory(training)
 
-    @loggers.avg("Agent average trajectory reward is %.2f",
-                 loggers.LogVarType.INSTANCE_ATTR,
+    @loggers.avg(loggers.LogVarType.INSTANCE_ATTR,
                  "traj_reward",
+                 "Agent average trajectory reward is %.2f",
                  (loggers.LogVarType.RETURNED_DICT, "done", lambda done: done),
-                 tensorboard=True)
+                 tensorboard=False)
     def run_trajectory(self, training=False):
         """ Generator: Runs a trajectory. This means the agent
         acts until a termination signal from the environment
@@ -319,6 +319,7 @@ class OffPolicyValueAgent(LearningAgent, metaclass=ABCMeta):
             raise ValueError("Epsilon must be in (0, 1.0]")
 
         prob = random.random()
+
         return sampled_action if prob > eps else self.action_space.sample()
 
     def sample_action(self, conditional_policy, training):
