@@ -182,7 +182,7 @@ def value(func,
           when=(),
           stdout=True,
           tensorboard=False):
-    """ Decorator for tracking averages
+    """ Decorator for tracking a value
 
         Args:
             func: decorated method

@@ -61,6 +61,6 @@ with infer_session.reuse() as infer:
 ```
 
 ### Samples
-Please check out the sample CartPole-v0 notebook under samples
+[CartPole-v0 notebook](https://github.com/oneTimePad/advantage/blob/master/samples/adv_CartPole-v0_demo.ipynb)
 
 If there are any problems with the learning algorithm please open an issue
