@@ -1,8 +1,9 @@
 import collections
 import random
+from advantage.replay_buffer import ReplayBuffer
 
-# TODO maybe make an Interface for buffers?
-class ExperienceReplayBuffer(object):
+
+class ExperienceReplayBuffer(ReplayBuffer):
     """Allows for collecting various SARSA(usually but not required) tuples taken by an agent.
     This buffer is commonly used in many approximate RL algorithms to
     allow for I.I.D data to training non-linear approximators (i.e. NN)
@@ -15,16 +16,8 @@ class ExperienceReplayBuffer(object):
                 buffer_type: type of elements to be pushed to buffer
         """
 
-        self._buffer_size =  buffer_size
+        self._buffer_size = buffer_size
 
-        #self._buffer_type = buffer_type -> keeping type safe seems unecessary
-        """
-        if not hasattr(buffer_type, "are_compatible"):
-            raise ValueError("buffer_type must implement 'are_compatible' classmethod")
-        self._are_compatible = buffer_type.are_compatible
-
-        self._template_item = None
-        """
         self._cur_buffer_size = 0
 
         self._buffer = collections.deque([], maxlen=buffer_size)
@@ -44,18 +37,6 @@ class ExperienceReplayBuffer(object):
                 item: item to add of type 'buffer_type'
         """
 
-        """
-        if not isinstance(item, self._buffer_type):
-            raise ValueError("item must be of type %s, but argument is of type %s" %(self._buffer_type, type(item)))
-        """
-        """
-        # first element determines compatbility
-        if self._template_item is None:
-            self._template_item = item
-
-        if not self._are_compatible(self._template_item, item):
-            raise ValueError("item is not compatible other items in buffer")
-        """
         self._cur_buffer_size = self._cur_buffer_size + 1 if self._cur_buffer_size < self._buffer_size else self._cur_buffer_size
 
         self._buffer.append(item)
