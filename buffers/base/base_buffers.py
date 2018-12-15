@@ -1,12 +1,11 @@
 from abc import ABCMeta, abstractmethod
 
-""" Replay Buffer interface
+""" Base Buffer Interfaces
 """
 
-
-class ReplayBuffer(metaclass=ABCMeta):
-    """ Represents a Replay Buffer
-    for Off-Policy learning
+class Buffer(metaclass=ABCMeta):
+    """ Represents a Buffer to hold
+    environment `Elements`
     """
 
     @abstractmethod
@@ -34,22 +33,6 @@ class ReplayBuffer(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def random_sample_and_pop(self, batch_size, sample_less=False):
-        """ Sample a random batch of Sarsa tuple and remove them
-                Args:
-                    batch_size: number of samples to collect
-                    sample_less: whether to allow sampling less than requested amount
-
-                Raises:
-                    ValueError: invalid amount of samples requested
-                        and sample_less is False
-
-                Returns:
-                    list of Elements
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
     def sample(self, batch_size, sample_less=False):
         """Sample a determinstic batch of Sarsa tuples
             Args:
@@ -68,6 +51,28 @@ class ReplayBuffer(metaclass=ABCMeta):
     @abstractmethod
     def sample_and_pop(self, batch_size, sample_less=False):
         """ Sample a determinstic batch of Sarsa tuple and remove them
+                Args:
+                    batch_size: number of samples to collect
+                    sample_less: whether to allow sampling less than requested amount
+
+                Raises:
+                    ValueError: invalid amount of samples requested
+                        and sample_less is False
+
+                Returns:
+                    list of Elements
+        """
+        raise NotImplementedError()
+
+class ReplayBuffer(Buffer, metaclass=ABCMeta):
+    """ Represents a Replay
+    buffer for Off-Policy
+    learning
+    """
+
+    @abstractmethod
+    def random_sample_and_pop(self, batch_size, sample_less=False):
+        """ Sample a random batch of Sarsa tuple and remove them
                 Args:
                     batch_size: number of samples to collect
                     sample_less: whether to allow sampling less than requested amount

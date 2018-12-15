@@ -1,7 +1,6 @@
 import collections
 import random
-from advantage.replay_buffer import ReplayBuffer
-
+from advantage.buffers.base.base_buffers import ReplayBuffer
 
 class ExperienceReplayBuffer(ReplayBuffer):
     """Allows for collecting various SARSA(usually but not required) tuples taken by an agent.
