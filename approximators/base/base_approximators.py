@@ -5,7 +5,6 @@ import tensorflow as tf
 from advantage.utils.proto_parsers import parse_which_one
 from advantage.utils.tf_utils import build_init_uninit_op, strip_and_replace_scope
 from advantage.approximators.base.utils import parse_optimizer
-from advantage.approximators.base.output import Output
 from advantage.exception import AdvantageError
 import advantage.loggers as loggers
 
@@ -206,7 +205,7 @@ def deep_approximator(cls):
             # build optimizer and add output
             with self._approximator_scope():
 
-                self._network = Output.from_config(self._config)(last_block)
+                self._network = last_block
 
                 # setup operations to copy parameters from runtime values
                 self._trainable_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
