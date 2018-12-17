@@ -1,1 +1,2 @@
 from .experience_replay_buffer import ExperienceReplayBuffer
+from advantage.buffers.base.base_buffers import ReplayBuffer
