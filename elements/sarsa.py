@@ -19,7 +19,7 @@ class Sarsa(Element, NumpyElementMixin, NormalizingElementMixin):
     reward = np_attr(np.float32)
     done = np_attr(np.bool)
     next_state = np_attr(np.float32)
-    next_action = np_attr(np.float32)
+    advantage = np_attr(np.float32)
 
     @staticmethod
     def proto_name_to_attr_dict():
@@ -46,8 +46,8 @@ class Sarsa(Element, NumpyElementMixin, NormalizingElementMixin):
                      reward,
                      done,
                      next_state,
-                     next_action=np.array([0.0], dtype=np.float32)):
-        """ Makes Sarsa. next_action is defaulted to zero because it is rarely used.
+                     advantage):
+        """ Makes Sarsa.
                 Args:
                     the attr values
 
@@ -59,7 +59,7 @@ class Sarsa(Element, NumpyElementMixin, NormalizingElementMixin):
                    reward=reward,
                    done=done,
                    next_state=next_state,
-                   next_action=next_action)
+                   advantage=advantage)
 
     @classmethod
     def make_element_from_env(cls, env_dict):
@@ -71,7 +71,7 @@ class Sarsa(Element, NumpyElementMixin, NormalizingElementMixin):
                     Sarsa
         """
         state = env_dict["state"].astype(np.float32) if isinstance(env_dict["state"], np.ndarray) else np.array([env_dict["state"]], dtype=np.float32)
-        action = env_dict["action"].astype(np.floa32) if isinstance(env_dict["action"], np.ndarray) else np.array([env_dict["action"]], dtype=np.float32)
+        action = env_dict["action"].astype(np.float32) if isinstance(env_dict["action"], np.ndarray) else np.array([env_dict["action"]], dtype=np.float32)
         reward = env_dict["reward"].astype(np.float32) if isinstance(env_dict["reward"], np.ndarray) else np.array([env_dict["reward"]], dtype=np.float32)
         done = np.array([env_dict["done"]], dtype=np.bool)
         next_state = env_dict["next_state"].astype(np.float32) if isinstance(env_dict["next_state"], np.ndarray) else np.array([env_dict["next_state"]], dtype=np.float32)
@@ -80,15 +80,15 @@ class Sarsa(Element, NumpyElementMixin, NormalizingElementMixin):
                                 action=action,
                                 reward=reward,
                                 done=done,
-                                next_state=next_state)
+                                next_state=next_state,
+                                advantage=np.copy(reward))
 
 
     @classmethod
     def make_element_zero(cls, state_col_dim,
                           action_col_dim,
                           reward_col_dim,
-                          next_state_col_dim,
-                          next_action_col_dim=1):
+                          next_state_col_dim):
         """ Makes a 'zeroed' out Sarsa. Again next_action has default.
                 Args:
                     the column dimensions of the numpy arrays
@@ -101,4 +101,4 @@ class Sarsa(Element, NumpyElementMixin, NormalizingElementMixin):
                    reward=np.zeros((reward_col_dim,), dtype=np.float32),
                    done=np.array([False]),
                    next_state=np.zeros((next_state_col_dim,), dtype=np.float32),
-                   next_action=np.zeros((next_action_col_dim,), dtype=np.float32))
+                   advantage=np.zeros((reward_col_dim,), dtype=np.float32))

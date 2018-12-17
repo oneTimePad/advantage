@@ -36,7 +36,7 @@ class NumpyElementMixin:
                        metadata={"np_attr" : True})
 
     @classmethod
-    def stack(cls, element_list, normalize_attrs=()):
+    def stack(cls, element_list):
         """ Combines common np_attrs in the elements in the list
         into one np_attr (stacked np.ndarray)
 
@@ -64,29 +64,32 @@ class NumpyElementMixin:
 
         np_attrs_dict_stacked = {k: np.vstack(v) for k, v in np_attrs_dict.items()}
 
+
+
+        return cls.make_element_from_dict(np_attrs_dict_stacked)
+
+    @classmethod
+    def normalize(cls,
+                  stack,
+                  eps=0.01,
+                  normalize_attrs=()):
+        """ Normalize `stacked` element (modifies it)
+
+                Args:
+                    stack: stack to normalize
+                    eps: min bound for variance
+                    normalize_attrs : tuple of names of attrs to normalize
+        """
         if normalize_attrs:
             attrs_to_normalize = filter(lambda x: x.name in normalize_attrs, cls.__attrs_attrs__)
 
             for attribute in attrs_to_normalize:
                 attr_name = attribute.name
-                np_attrs_dict_stacked[attr_name] = cls.normalize(np_attrs_dict_stacked[attr_name])
-
-        return cls.make_element_from_dict(np_attrs_dict_stacked)
-
-    @staticmethod
-    def normalize(stack, eps=0.01):
-        """ Normalize `stacked` element
-
-                Args:
-                    stack: stack to normalize
-                    eps: min bound for variance
-
-                Returns:
-                    normalized stack
-        """
-        return (stack - stack.mean()) / np.maximum(stack.std(), np.sqrt(eps))
-
-
+                np_array = stack[attr_name]
+                mean = np_array.mean()
+                std = np_array.std()
+                np_array -= mean
+                np_array /= np.maximum(std, np.sqrt(eps))
 
 
 class NormalizingElementMixin:
