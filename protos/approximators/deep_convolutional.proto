@@ -3,8 +3,12 @@ syntax = "proto2";
 
 package advantage.protos;
 
-import "advantage/protos/approximators/base/utils.proto";
+import "advantage/protos/approximators/base/blocks.proto";
 
+enum Padding {
+    valid = 1;
+    same = 2;
+}
 
 message DeepConvolutional {
     repeated ConvolutionalBlock block = 1;

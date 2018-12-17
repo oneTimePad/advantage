@@ -2,20 +2,13 @@ syntax = "proto2";
 
 package advantage.protos;
 
-import "advantage/protos/approximators/base/utils.proto";
-import "advantage/protos/approximators/base/outputs.proto";
 import "advantage/protos/approximators/deep_dense.proto";
 import "advantage/protos/approximators/deep_convolutional.proto";
 
-enum Shape {
-    TwoD = 1;
-    ThreeD = 2;
-    FourD = 3;
-}
-
-message Input {
-    required Shape shape = 1;
-
+enum Optimizer {
+    NoOptimizer = 0;
+    AdamOptimizer = 1;
+    GradientDescentOptimizer = 2;
 }
 
 message Approximators {
@@ -30,10 +23,4 @@ message Approximators {
 
     required float learning_rate = 6;
 
-    oneof output {
-        Value value = 7;
-        Multinomial multinomial = 8;
-        Binomial binomial = 9;
-        Gaussian gaussian = 10;
-    }
 }

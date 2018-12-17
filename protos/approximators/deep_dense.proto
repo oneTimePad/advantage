@@ -3,7 +3,7 @@ syntax = "proto2";
 
 package advantage.protos;
 
-import "advantage/protos/approximators/base/utils.proto";
+import "advantage/protos/approximators/base/blocks.proto";
 
 message DeepDense {
     repeated DenseBlock block = 1;

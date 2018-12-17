@@ -1,8 +1,6 @@
 syntax = "proto2";
 
-
 package advantage.protos;
-
 
 enum Activation {
     NONE = 0;
@@ -11,18 +9,8 @@ enum Activation {
     ELU = 3;
 }
 
-enum Padding {
-    valid = 1;
-    same = 2;
-}
 
 enum Initializer {
     ones_initializer = 0;
     variance_scaling_initializer = 1;
-}
-
-enum Optimizer {
-    NoOptimizer = 0;
-    AdamOptimizer = 1;
-    GradientDescentOptimizer = 2;
 }
