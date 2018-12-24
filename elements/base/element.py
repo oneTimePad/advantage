@@ -59,6 +59,10 @@ class NumpyElementMixin:
         np_attrs_dict = {x.name: [] for x in np_attrs}
 
         for element in element_list:
+            if not isinstance(element, cls):
+                raise ValueError("all elements in `element_list`"
+                                 "must be an instance of %s" % cls)
+
             for name, name_list in np_attrs_dict.items():
                 name_list.append(getattr(element, name))
 
