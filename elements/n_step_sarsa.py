@@ -12,7 +12,7 @@ class NStepSarsa(Sarsa):
     similar to Sarsa that also accounts
     for the N-Step discounted reward
     """
-    n_step_reward = np_attr(np.float32)
+    n_step_return = np_attr(np.float32)
 
     @staticmethod
     def proto_name_to_attr_dict():
@@ -20,7 +20,7 @@ class NStepSarsa(Sarsa):
         in protobuf file to actual attr names
         """
 
-        return {"normalizeNStepReward" : "n_step_reward",
+        return {"normalizeNStepReturn" : "n_step_return",
                 **super(NStepSarsa, NStepSarsa).proto_name_to_attr_dict()}
 
 
@@ -31,7 +31,7 @@ class NStepSarsa(Sarsa):
                      reward,
                      done,
                      next_state,
-                     n_step_reward):
+                     n_step_return):
 
         """ Makes NStepSarsa.
                 Args:
@@ -45,7 +45,7 @@ class NStepSarsa(Sarsa):
                    reward=reward,
                    done=done,
                    next_state=next_state,
-                   n_step_reward=n_step_reward)
+                   n_step_return=n_step_return)
 
 
     @classmethod
@@ -60,7 +60,7 @@ class NStepSarsa(Sarsa):
                 NStepSarsa
         """
         sarsa_kwargs = super().parse_env(env_dict)
-        n_step_reward = np.copy(sarsa_kwargs["reward"])
+        n_step_return = np.copy(sarsa_kwargs["reward"])
 
-        return cls(n_step_reward=n_step_reward,
+        return cls(n_step_return=n_step_return,
                    **sarsa_kwargs)

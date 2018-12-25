@@ -4,10 +4,8 @@ import numpy as np
 from advantage.utils.tf_utils import ScopeWrap
 from advantage.builders.approximators import build_approximator
 
-""" Contains common policies for RL agents
+""" Contains common policies/functions for RL agents.
 """
-
-
 
 def _value_layer(tensor_inputs, num_actions):
     """Useful for constructing output of state-value function or action-value function
@@ -173,12 +171,31 @@ class ContinousActionValueFunction(ApproximateRLFunction):
     Learning and DDPG
     """
 
+    def __init__(self,
+                 scope,
+                 approximator,
+                 has_action_source=False):
+
+
+        self._has_action_source = has_action_source
+        super().__init__(self, scope, approximator)
+
     def __call__(self,
                  session,
                  states,
-                 actions):
+                 actions=None):
 
-        return self._eval_func(session, states, actions)
+        if self._has_action_source and actions:
+            self._eval_func(session, states, actions)
+        elif self._has_action_source and not actions:
+            raise ValueError("when built without an action source"
+                             " kwarg `actions` specifying selected"
+                             " actions is required")
+        if actions:
+            raise ValueError("actions must not be passed when"
+                             " when a action source is pressent")
+
+        return self._eval_func(session, states)
 
     def set_up(self,
                session,
@@ -194,8 +211,13 @@ class ContinousActionValueFunction(ApproximateRLFunction):
 
             self._func = _value_layer(self._approximator.network, 1)
 
-        self._eval_func = lambda session, states: self._approximator.inference(session,
-                                                                               {"state": states})
+        if self._has_action_source:
+            self._eval_func = lambda session, states: self._approximator.inference(session,
+                                                                                   {"state": states})
+        else:
+            self._eval_func = lambda session, states, actions: self._approximator.inference(session,
+                                                                                            {"state": states,
+                                                                                             "action": actions})
 
         self._approximator.initialize(session)
 
@@ -238,6 +260,48 @@ class ContinousActionValueFunction(ApproximateRLFunction):
 
         return cls(scope,
                    approximator)
+
+    @classmethod
+    def build_from_action_source(cls,
+                                 upper_scope,
+                                 approximator_config,
+                                 state_shape,
+                                 action_func):
+        """ Constructs the Value Function with an action
+        source function. This makes computing the gradient
+        with respect to the action source parameters
+        easier. In addition, this function only needs to
+        take the state as input as opposed to the state
+        and action.
+
+            Args:
+                upper_scope : the upper ScopeWrap
+                approximator_config: config to build approximator
+                state_shape: shape of state input to approximator
+                action_shape: shape of action input to approximator
+
+            Returns:
+                ContinousActionValueFunction
+        """
+
+        name_scope = "continuous_action_value_function"
+
+        scope = ScopeWrap.build(upper_scope, name_scope)
+
+        with scope():
+            state_plh = tf.placeholder(shape=state_shape,
+                                       dtype=tf.float32,
+                                       name="state")
+
+            concat = tf.concat([state_plh, action_func.network], axis=1)
+
+            approximator = build_approximator(approximator_config,
+                                              concat,
+                                              [state_plh])
+
+        return cls(scope,
+                   approximator,
+                   has_action_source=True)
 
 
 class ContinuousRealPolicy(ApproximateRLFunction):
@@ -316,7 +380,7 @@ class ContinuousRealPolicy(ApproximateRLFunction):
 
 
 
-class ProbabilisticPolicy(ApproximateRLFunction, metaclass=ABCMeta):
+class ProbabilisticPolicy(ApproximateRLFunction):
     """ Represents a
     policy that selects actions
     given a state based on a probability
@@ -442,7 +506,9 @@ class MultinomialPolicy(ProbabilisticPolicy):
         self._eval_func = sample
 
 class BinomialPolicy(ProbabilisticPolicy):
-    """ Policy on 2 actions
+    """ Policy on 2 actions.
+        An alternative to MultinomialPolicy
+        on two actions.
     """
 
     name_scope = "binomial_policy"

@@ -1,6 +1,7 @@
 from abc import ABCMeta, abstractmethod
 import collections
 
+
 """ Base Buffer Interfaces
 """
 
@@ -128,7 +129,8 @@ class ReplayBuffer(Buffer):
         """ Sample a batch of `Elements` from buffer and  remove them
                 Args:
                     batch_size: number of samples to collect
-                    sample_less: whether to allow sampling less than requested amount
+                    sample_less: whether to allow sampling less
+                        than requested amount
 
                 Raises:
                     ValueError: invalid amount of samples requested
@@ -153,3 +155,36 @@ class ReplayBuffer(Buffer):
         self._cur_buffer_size -= batch_size
 
         return batch
+
+    def sample_batches(self,
+                       batch_size,
+                       num_batches=None,
+                       sample_less=False,
+                       pop=True):
+        """ Generator for sampling batches of `Elements` from buffer
+
+                Args:
+                    batch_size: number of samples to collect
+                        per yield
+                    num_batches: number of batches to fetch
+                        `None` means fetch until buffer is empty
+                    sample_less: whether to allow sampling less
+                        than requested amount
+                    pop: whether to remove elements from batch
+        """
+        num_batches_in_buffer = self.len // batch_size
+
+        if num_batches > num_batches_in_buffer:
+            num_batches = None # requesting more than is in buffer, mean take all of it
+
+        if not num_batches:
+            # check if there is an remainder in the buffer
+            num_batches = num_batches_in_buffer + int((self.len % batch_size) != 0)
+
+        sample_func = self.sample_and_pop if pop else self.sample
+        for _ in range(num_batches):
+            yield sample_func(batch_size)
+
+        # whether we should return the remainder
+        if sample_less and num_batches > num_batches_in_buffer:
+            yield sample_func(batch_size, sample_less=True)

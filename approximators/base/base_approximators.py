@@ -112,7 +112,7 @@ def deep_approximator(cls):
             self._optimizer = optimizer(name_scope)(self._learning_rate)
 
             self._loss = None
-            self._applied_gradients = None
+            self._mean_applied_gradients = None
             self._init_op = None
             self._train_op = None
 
@@ -145,10 +145,10 @@ def deep_approximator(cls):
             return self._learning_rate
 
         @property
-        def applied_gradients(self):
-            """ property `_applied_gradients`
+        def mean_applied_gradients(self):
+            """ property `_mean_applied_gradients`
             """
-            return self._applied_gradients
+            return self._mean_applied_gradients
 
         @property
         def approximator_scope(self):
@@ -310,15 +310,34 @@ def deep_approximator(cls):
                 else:
                     self._init_op = tf.no_op()
 
-        def gradients(self, loss):
+        def from_gradient_func(self, gradient_func):
             """ Compute the network gradients for parameter update
+            given a function that computes the gradient given
+            the parameter to take the gradient with respect to
+                Args:
+                    gradient_func: (i.e.) lambda param: tf.gradient(..., param)
 
                 Returns:
                     gradients tensor
             """
+
+            with self._approximator_scope():
+                self._loss = None
+                return [(gradient_func(param), param) for param in self.trainable_parameters]
+
+        def gradients(self, loss):
+            """ Compute the network gradients for parameter update
+                    Args:
+                        loss: loss function
+
+                    Returns:
+                        list(tuple(gradient_op, variable_with_respect_to))
+            """
+
             with self._approximator_scope():
                 self._loss = loss
                 return self._optimizer.compute_gradients(loss, self.trainable_parameters)
+
 
         def apply_gradients(self, gradients):
             """ Applied gradients to network optimizer and creates train operation
@@ -326,7 +345,10 @@ def deep_approximator(cls):
                         gradients in proper tensorflow format
             """
             with self._approximator_scope():
-                self._applied_gradients = gradients
+                self._mean_applied_gradients = [(tf.reduce_mean(gradient,
+                                                                axis=1,
+                                                                name="reduce_mean_gradients"),
+                                            v) for gradient, v in gradients]
                 global_step = tf.train.get_or_create_global_step()
                 summary, loss_avg = _avg_loss_summary(self._loss)
                 with tf.control_dependencies([loss_avg]):
@@ -347,6 +369,24 @@ def deep_approximator(cls):
                                                                         var_list=self.trainable_parameters,
                                                                         global_step=global_step)]
 
+
+        def fetch_mean_gradient(self, session, runtime_inputs, runtime_targets):
+            """ Perform a network parameter update
+                    Args:
+                        runtime_inputs: usually training batch inputs containg
+                           placeholders and values
+                        runtime_targets: training batch targets
+
+                    Returns:
+                        list(tuple(mean_applied_gradient, variable_with_repsect_to))
+            """
+            runtime_batch = {}
+            runtime_batch.update(self._produce_input_feed_dict(runtime_inputs))
+            runtime_batch.update(self._produce_target_feed_dict(runtime_targets))
+
+            return session.run(self._mean_applied_gradients, feed_dict=runtime_batch)
+
+
         @loggers.value(loggers.LogVarType.RETURNED_VALUE,
                        stdout=False,
                        tensorboard=True)
@@ -354,7 +394,8 @@ def deep_approximator(cls):
             """ Perform a network parameter update
                     Args:
                         runtime_inputs: usually training batch inputs containg
-                           placeholders and values runtime_targets: training batch targets
+                           placeholders and values
+                        runtime_targets: training batch targets
 
                     Returns:
                         tf summary

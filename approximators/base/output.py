@@ -46,32 +46,7 @@ class Output:
         """
         return tf.nn.sigmoid(tensor_inputs)
 
-    @staticmethod
-    def value(tensor_inputs, **kwargs):
-        """Useful for constructing output of state-value function or action-value function
-                Args:
-                    tensor_inputs: output of network to pass in
-                    **kwargs:
-                        num_actions: number of actions in a determinstic settings or
-                            1 for value function
-                Returns:
-                    regression layer output
-        """
-        shape = tensor_inputs.get_shape()
-        # conv2d needs 4D input
-        if len(shape) != 4:
-            for _ in range(4 - len(shape)):
-                tensor_inputs = tf.expand_dims(tensor_inputs, axis=1)
-        shape = tensor_inputs.get_shape()
-        kernel_h = int(shape[1])
-        kernel_w = int(shape[2])
-        conv = tf.layers.conv2d(tensor_inputs,
-                                filters=kwargs["num_actions"],
-                                kernel_size=[kernel_h, kernel_w],
-                                activation=None,
-                                name="value")
-        # remove extra dimensions added
-        return tf.squeeze(conv, axis=[1, 2])
+
 
     @staticmethod
     def gaussian(tensor_inputs, **kwargs):
