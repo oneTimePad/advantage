@@ -3,11 +3,13 @@ import tensorflow as tf
 import numpy as np
 from advantage.buffers import ReplayBuffer
 from advantage.utils.tf_utils import ScopeWrap
-from advantage.elements import NStepSarsa
+from advantage.elements import NStepSarsa, Sarsa
 
 """ This module consists of common objectives utilized in Deep
 RL. These objectives are pretty much plug-and-play allowing
-them to adjust to many popular RL algorithms.
+them to adjust to many popular RL algorithms. MetaObjectives
+allow for multiple objectives to be plugged in to build more
+complex objectives.
 
     The main two forms of model-free RL algorithms are:
         Value-Gradient
@@ -20,7 +22,107 @@ class Objective(metaclass=ABCMeta):
     partial trajectory samples
     """
 
-    pass
+    name_scope = None
+
+    def __init__(self,
+                 upper_scope,
+                 replay_buffer,
+                 element_cls,
+                 func,
+                 iteration_of_optimization):
+
+        self._scope = ScopeWrap.build(upper_scope, self.name_scope)
+
+        self._replay_buffer = replay_buffer
+        self._element_cls = element_cls
+
+        self._func = func
+
+        self._iterations_of_optimization = iteration_of_optimization
+
+        self._gradients = None
+
+    @property
+    def func(self):
+        """ property for `_func`
+        """
+        return self._func
+
+    @abstractmethod
+    def set_up(self,
+               session,
+               regularizer=None):
+        """ Builds all necessary TF-Graph
+        components
+
+            Args:
+                session: tf.Session
+                regularizer: regularizer to use
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def push(self, env_dict):
+        """ Accounts for new env_dict
+        element
+
+            Args:
+                env_dict: sampled from `Environment`
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def update_feed_dict(self, stacked):
+        """ Produces the two feed_dict's
+        for performing gradient updates
+        for DeepApproximator's
+        """
+        raise NotImplementedError()
+
+    def set_up_with_gradient_src(self,
+                                 session):
+        """ Builds all necessary TF-Graph
+        components
+
+            Args:
+                session: tf.Session
+                regularizer: regularizer to use
+        """
+        self._func.set_up(session)
+
+        with self._scope():
+
+            make_plh = lambda param: tf.placeholder(shape=param.shape,
+                                                    dtype=param.shape)
+            gradients = self._func.from_gradient_func(make_plh)
+
+            self._func.apply_gradients(gradients)
+
+    def fetch_gradient(self,
+                       session,
+                       batch_size,
+                       sample_less=False,
+                       pop=True):
+        """ Yields the gradients for each batch, as opposed to
+        performing the update.
+            Args:
+                session: tf.Session
+                batch_size: update batch size
+                sample_less: whether to sample less than `batch_size`
+                pop: whether to removed from the buffer when sampling
+
+            Yield:
+                list()
+        """
+        for batch in self._replay_buffer.sample_batches(batch_size,
+                                                        self._iterations_of_optimization,
+                                                        sample_less=sample_less,
+                                                        pop=pop):
+
+            stacked = self._element_cls.stack(batch)
+
+            yield self._func.fetch_mean_gradient(session,
+                                                 *self.update_feed_dict(stacked))
 
 
 class NStepAdvantageObjective(Objective):
@@ -71,12 +173,6 @@ class NStepAdvantageObjective(Objective):
         self._gradients = None
 
         self._waiting_buffer = ReplayBuffer(steps)
-
-    @property
-    def value_func(self):
-        """ property for `_value_func`
-        """
-        return self._value_func
 
     @property
     def bootstrap_func(self):
@@ -157,6 +253,11 @@ class NStepAdvantageObjective(Objective):
 
         else:
             self._waiting_buffer.push(element)
+
+
+    def update_feed_dict(self, stacked):
+        return [{"state": stacked["state"]},
+                {"bellman_target_plh": stacked["n_step_return"]}]
 
     def fetch_gradient(self,
                        session,
@@ -263,6 +364,9 @@ class PolicyGradientObjective(Objective):
     to specifying an objective for an
     `Actor` or Policy related objective
     """
+
+    name_scope = "policy_gradient_objective"
+
     def __init__(self,
                  upper_scope,
                  replay_buffer,
@@ -270,8 +374,11 @@ class PolicyGradientObjective(Objective):
                  policy_func,
                  policy_return,
                  iteration_of_optimization,
-                 from_gradient=False,
-                 name_scope=""):
+                 from_gradient=False):
+
+        if not isinstance(element_cls, Sarsa):
+            raise ValueError("PolicyGradientObjective requires `element_cls`"
+                             " to be an instance of `Sarsa`")
 
         self._policy_func = policy_func
         self._policy_return = policy_return
@@ -283,9 +390,6 @@ class PolicyGradientObjective(Objective):
         self._from_gradient = from_gradient
 
         self._gradients = None
-
-        scope = ScopeWrap.build(upper_scope, name_scope)
-        self._scope = ScopeWrap.build(scope, "policy_gradient_objective")
 
         self._action_taken_plh = None
         self._next_state_plh = None
@@ -393,7 +497,14 @@ class PolicyGradientObjective(Objective):
                                      {"action_taken": stacked["action"],
                                       "next_state": stacked["next_state"]})
 
-class MultiActorCriticObjective(Objective):
+class MetaObjective:
+    """ Represents objectives that
+    combine multiple objectives together
+    """
+    pass
+
+
+class MultiActorCriticObjective(MetaObjective):
     """ Represents the objective for
     and Actor-Critic Agent. Objectives
     must be optimized with respect
@@ -497,7 +608,7 @@ class MultiActorCriticObjective(Objective):
         self._policy_grad_objectives[-1].optimize(session,
                                                   batch_size,
                                                   sample_less=sample_less,
-                                                  pop=True)
+                                                  pop=pop)
 
 class DistributedMultiActorCriticObjective(MultiActorCriticObjective):
     """ Represents the objective used by Distributed Asynchronous
@@ -506,7 +617,7 @@ class DistributedMultiActorCriticObjective(MultiActorCriticObjective):
     """
     pass
 
-class MetaLearningObjective(Objective):
+class MetaLearningObjective(MetaObjective):
     """ Represents the task of `Meta-Learning`
     in RL. This is where the agents learn
     a more general loss/reward function that can be

@@ -26,10 +26,12 @@ class DeepQAgent(OffPolicyValueAgent):
         self._copy = None
 
         super().__init__(policy=policy_q_network,
+                         target=target_q_network,
                          environment=environment,
                          graph=graph,
                          agent_scope=agent_scope,
                          discount_factor=discount_factor)
+
 
 
     def set_up_train(self):

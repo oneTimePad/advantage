@@ -269,7 +269,7 @@ class OffPolicyValueAgent(LearningAgent, metaclass=ABCMeta):
     The agent usually is used in a Discrete Action space
     """
 
-    def __init__(self, environment, *args, **kwargs):
+    def __init__(self, environment, target, *args, **kwargs):
         action_space = environment.action_space
         self._num_of_actions = action_space.n
 
@@ -283,9 +283,18 @@ class OffPolicyValueAgent(LearningAgent, metaclass=ABCMeta):
         # set by subclass (only for training)
         self.epsilon_func = lambda: None
 
+        # target network
+        self._target = target
+
         super().__init__(environment=environment,
                          *args,
                          **kwargs)
+
+    @property
+    def target(self):
+        """ property for _target
+        """
+        return self._target
 
     @property
     def num_of_actions(self):
