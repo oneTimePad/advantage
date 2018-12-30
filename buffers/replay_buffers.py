@@ -1,8 +1,10 @@
 from abc import ABCMeta, abstractmethod
 import collections
+import random
 
-
-""" Base Buffer Interfaces
+""" This module contains `Replay Buffers`. These
+buffer take in `Element`s and replay them to the agent
+at a latter time
 """
 
 class Buffer(metaclass=ABCMeta):
@@ -12,7 +14,7 @@ class Buffer(metaclass=ABCMeta):
 
     @abstractmethod
     @property
-    def buffer_size(self):
+    def max_buffer_size(self):
         """ propety for Limit size
         of buffer
         """
@@ -20,7 +22,7 @@ class Buffer(metaclass=ABCMeta):
 
     @abstractmethod
     @property
-    def len(self):
+    def num_elements(self):
         """ property for current
         buffer length
         """
@@ -78,18 +80,23 @@ class ReplayBuffer(Buffer):
                 buffer_size: size of deque
         """
 
-        self._buffer_size = buffer_size
+        self._max_buffer_size = buffer_size
 
         self._cur_buffer_size = 0
 
         self._buffer = collections.deque([], maxlen=buffer_size)
 
     @property
-    def buffer_size(self):
-        return self._buffer_size
+    def max_buffer_size(self):
+        """ property for `_max_buffer_size`
+        """
+        return self._max_buffer_size
 
     @property
-    def len(self):
+    def num_elements(self):
+        """ property for the number of elements
+        `_cur_buffer_size`
+        """
         return self._cur_buffer_size
 
     def push(self, item):
@@ -97,7 +104,7 @@ class ReplayBuffer(Buffer):
             Args:
                 item: item to add of type 'buffer_type'
         """
-        if self._cur_buffer_size < self._buffer_size:
+        if self._cur_buffer_size < self._max_buffer_size:
             self._cur_buffer_size += 1
 
         self._buffer.append(item)
@@ -172,14 +179,14 @@ class ReplayBuffer(Buffer):
                         than requested amount
                     pop: whether to remove elements from batch
         """
-        num_batches_in_buffer = self.len // batch_size
+        num_batches_in_buffer = self.num_elements // batch_size
 
         if num_batches > num_batches_in_buffer:
             num_batches = None # requesting more than is in buffer, mean take all of it
 
         if not num_batches:
             # check if there is an remainder in the buffer
-            num_batches = num_batches_in_buffer + int((self.len % batch_size) != 0)
+            num_batches = num_batches_in_buffer + int((self.num_elements % batch_size) != 0)
 
         sample_func = self.sample_and_pop if pop else self.sample
         for _ in range(num_batches):
@@ -188,3 +195,43 @@ class ReplayBuffer(Buffer):
         # whether we should return the remainder
         if sample_less and num_batches > num_batches_in_buffer:
             yield sample_func(batch_size, sample_less=True)
+
+
+class RandomizedReplayBuffer(ReplayBuffer):
+    """Allows for collecting various `Elements` made by an agent.
+    This buffer is commonly used in many approximate RL algorithms to
+    allow for I.I.D data to training non-linear approximators (i.e. NN)
+    A.K.A Experience Replay Buffer
+    """
+
+    def sample(self, batch_size, sample_less=False):
+        """Randomly samples a batch of Sarsa tuples
+            Args:
+                batch_size: number of samples to collect
+                sample_less: whether to allow sampling less than requested amount
+
+            Raises:
+                ValueError: invalid amount of samples requested
+                    and sample_less is False
+
+            Returns:
+                list of a Sarsa tuples
+        """
+        random.shuffle(self._buffer)
+        return super().sample(batch_size, sample_less=sample_less)
+
+    def sample_and_pop(self, batch_size, sample_less=False):
+        """ Sample a random batch of Sarsa tuple and remove them
+                Args:
+                    batch_size: number of samples to collect
+                    sample_less: whether to allow sampling less than requested amount
+
+                Raises:
+                    ValueError: invalid amount of samples requested
+                        and sample_less is False
+
+                Returns:
+                    list of Sarsa tuples
+        """
+        random.shuffle(self._buffer)
+        return super().sample_and_pop(batch_size, sample_less=sample_less)
