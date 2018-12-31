@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod
+from enum import Enum
 import tensorflow as tf
 import numpy as np
 from advantage.utils.tf_utils import ScopeWrap
@@ -505,13 +506,13 @@ class MultinomialPolicy(ProbabilisticPolicy):
 
         self._eval_func = sample
 
-class BinomialPolicy(ProbabilisticPolicy):
+class BernoulliPolicy(ProbabilisticPolicy):
     """ Policy on 2 actions.
         An alternative to MultinomialPolicy
         on two actions.
     """
 
-    name_scope = "binomial_policy"
+    name_scope = "bernoulli_policy"
 
     @staticmethod
     def _sample_binomial(distribution):
@@ -637,3 +638,11 @@ class GaussianPolicy(ProbabilisticPolicy):
             return self._sample_gaussian(mean_value, sigma_value)
 
         self._eval_func = sample
+
+class Policies(Enum):
+    VALUE = ValueFunction
+    CONT_ACTION_VALUE = ContinousActionValueFunction
+    CONT_REAL = ContinuousRealPolicy
+    MULTINOMIAL = MultinomialPolicy
+    BERNOULLI = BernoulliPolicy
+    GAUSSIAN = GaussianPolicy

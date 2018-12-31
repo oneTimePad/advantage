@@ -70,7 +70,7 @@ class Objective(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-@gin.configurable(blacklist=["upper_scope", "replay_buffer"])
+@gin.configurable(blacklist=["upper_scope"])
 class ValueGradientObjective(Objective):
     """ Used for an agent
     that need to minimize the Advantage
@@ -143,6 +143,7 @@ class ValueGradientObjective(Objective):
         discounted = factors * reward
         elements.n_step_return += discounted
 
+    @gin.configurable("ValueGradientObjective")
     def set_up(self,
                session,
                regularizer=None):
@@ -384,4 +385,5 @@ class Objectives(Enum):
     """Possible Objectives to select
     """
     VALUE_GRADIENT = ValueGradientObjective
+    DECOUPLED_VALUE_GRADIENT = DecoupledValueGradientObjective
     POLICY_GRADIENT = PolicyGradientObjective

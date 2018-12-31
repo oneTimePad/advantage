@@ -2,7 +2,12 @@ from abc import ABCMeta, abstractmethod
 import tensorflow as tf
 import gin
 from advantage.utils.tf_utils import ScopeWrap
+from advantage.utils.gin_utils import gin_bind, gin_bind_init
 from advantage.loggers import loggers
+from advantage.agents.objectives import Objectives
+from advantage.agents.policies import Policies
+
+
 """ This module represents the main set of agent
 class or the `base`. All other agents subclasses
 of these
@@ -23,7 +28,8 @@ class LearningAgent(metaclass=ABCMeta):
     def __init__(self,
                  environment,
                  graph,
-                 upper_scope):
+                 upper_scope,
+                 local_stats):
 
         self._environment = environment
         self._done = True
@@ -38,6 +44,10 @@ class LearningAgent(metaclass=ABCMeta):
         self._agent_scope = ScopeWrap.build(upper_scope, self.name_scope)
 
         self._policy = None
+
+        self._local_stats = local_stats
+
+        self._objectives = None
 
     @property
     def traj_reward(self):
@@ -108,13 +118,28 @@ class LearningAgent(metaclass=ABCMeta):
         """
         return self._agent_scope
 
+    @property
+    def local_stats(self):
+        """ property for `_local_stats`
+        """
+        return self._local_stats
+
     @abstractmethod
-    def construct(self, **objectives):
+    @classmethod
+    def gin_wire(cls):
+        """ Calls all the gin_bindings.
+        Guaranteed to be called before
+        instantiation and once
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def construct(self, objectives):
         """ Agent construction hook.
         The agents selected `objectives`
         are passed in and the agent can complete
         any further setup that the objectives
-        need
+        need **NEEDS to be made `gin.configurable`
         """
         raise NotImplementedError()
 
@@ -226,12 +251,52 @@ class LearningAgent(metaclass=ABCMeta):
         return steps
 
 
-@gin.configurable
+def gin_construct(func):
+    """ decorator for the construct method to first instantiate
+    the objectives and call their set_up methods
+    when construct is done
+    """
+    def wrapped(self, objectives):
+        objective_init = {}
+        for name, obj in objectives.items():
+            objective_init[name] = obj()
+
+        func(objective_init)
+
+        for obj in objective_init.values():
+            obj.set_up(self.session)
+
+    wrapped.__name__ = func.__name__
+    wrapped = gin.configurable(wrapped)
+    return wrapped
+
+def gin_bind_objectives(cls, objectives):
+    """ shortcut for gin_bind for objectives
+            Args:
+                cls: class running from
+                objectives: {"obj_name": obj_enum_value,
+                            ...}
+    """
+    gin_bind(cls, "construct.objectives", objectives)
+
+
 class ValueGradientAgent(LearningAgent):
     """ This agent minimizes the `Bellman` error.
     This is similar to the variants of TD-Learning/Monte-Carlo
     """
-    pass
+    name_scope = "value_gradient_agent"
+
+    @classmethod
+    def gin_wire(cls):
+        gin_bind_objectives(cls, {"value" : Objectives.VALUE_GRADIENT})
+        gin_bind_init(Objectives.VALUE_GRADIENT, "value_func", Policies.VALUE)
+
+
+    @gin_construct
+    def construct(self, objectives):
+        pass
+
+
 
 @gin.configurable
 class DecoupledValueGradientAgent(ValueGradientAgent):
