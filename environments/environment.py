@@ -1,14 +1,14 @@
 from abc import ABCMeta
 from abc import abstractmethod
 
-class Environment(object, metaclass=ABCMeta):
+class Environment(metaclass=ABCMeta):
     """ Represents the environment for an RL Agent. The Environment
     maintains the MDP's state and acts as a simulator for the agent to
     learn in. User can define their own environments/simulators. The simulators
     will keep track of their state in their own chosen way.
     """
     @abstractmethod
-    def step(self, state):
+    def step(self, action):
         """The Agent performs an action in the environment, modifying the MDP
         state and resulting in a transition.
 

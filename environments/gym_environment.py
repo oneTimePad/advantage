@@ -1,7 +1,9 @@
-import gym
 import numpy as np
+import gym
+import gin
 from advantage.environments.environment import Environment
 
+@gin.configurable
 class GymEnvironment(Environment):
     """ Integrates the OpenAI Gym Environments
     """
@@ -15,9 +17,17 @@ class GymEnvironment(Environment):
         _, reward, __, ___ = self._gym.step(action)
         reward_col_dim = reward.shape[0] if isinstance(reward, np.ndarray) else 1
 
-        # TODO state/next_state is redundant
+
         self._dims = {"state_col_dim": state_col_dim, "action_col_dim": action_col_dim,\
-                      "reward_col_dim": reward_col_dim, "next_state_col_dim": state_col_dim}
+                      "reward_col_dim": reward_col_dim}
+
+    @property
+    def action_space(self):
+        return self._gym.action_space
+
+    @property
+    def dims(self):
+        return self._dims
 
     def step(self, action):
         next_state, reward, done, _ = self._gym.step(action)
@@ -30,11 +40,3 @@ class GymEnvironment(Environment):
         """ Renders Gym
         """
         return self._gym.render(**kwargs)
-
-    @property
-    def action_space(self):
-        return self._gym.action_space
-
-    @property
-    def dims(self):
-        return self._dims
