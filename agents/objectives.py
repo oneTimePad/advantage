@@ -3,9 +3,8 @@ from abc import ABCMeta, abstractmethod
 import tensorflow as tf
 import numpy as np
 import gin
-from advantage.buffers import ReplayBuffer
+from advantage.buffers.replay_buffers import ReplayBuffer
 from advantage.utils.tf_utils import ScopeWrap
-from advantage.elements import NStepSarsa, Sarsa
 
 """ This module consists of common objectives utilized in Deep
 RL. These objectives are pretty much plug-and-play allowing
@@ -42,8 +41,6 @@ class Objective(metaclass=ABCMeta):
 
         self._iterations_of_optimization = iteration_of_optimization
 
-        self._gradients = None
-
     @property
     def func(self):
         """ property for `_func`
@@ -73,15 +70,7 @@ class Objective(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    @abstractmethod
-    def update_feed_dict(self, stacked):
-        """ Produces the two feed_dict's
-        for performing gradient updates
-        for DeepApproximator's
-        """
-        raise NotImplementedError()
-
-@gin.configurable
+@gin.configurable(blacklist=["upper_scope", "replay_buffer"])
 class ValueGradientObjective(Objective):
     """ Used for an agent
     that need to minimize the Advantage
@@ -91,6 +80,7 @@ class ValueGradientObjective(Objective):
     This is also known as the `Value Gradient`
     """
     def __init__(self,
+                 upper_scope,
                  replay_buffer,
                  element_cls,
                  discount_factor,
@@ -118,17 +108,23 @@ class ValueGradientObjective(Objective):
         self._discount_factor = discount_factor
         self._iterations_of_optimization = iteration_of_optimization
         self._steps = steps
-        self._value_func = value_func
 
         self._objective = None
 
-        self._waiting_buffer = ReplayBuffer(steps)
+        self._waiting_buffer = ReplayBuffer(element_cls, steps)
+
+        super().__init__(self,
+                         upper_scope,
+                         replay_buffer,
+                         element_cls,
+                         value_func,
+                         iteration_of_optimization)
 
     @property
     def bootstrap_func(self):
         """ property for bootstrapping func
         """
-        return self._value_func
+        return self._func
 
     def _add_reward(self, reward):
         """ Integrates `reward` into the
@@ -140,8 +136,8 @@ class ValueGradientObjective(Objective):
                     the latest `Element`
         """
 
-        buffer_len = self._waiting_buffer.len
-        elements = self._waiting_buffer.sample(len(self._waiting_buffer))
+        buffer_len = len(self._waiting_buffer)
+        elements = self._waiting_buffer.sample(buffer_len)
 
         factors = np.power(self._discount_factor, np.arange(1, buffer_len)[-1:])
         discounted = factors * reward
@@ -157,7 +153,7 @@ class ValueGradientObjective(Objective):
                 session: tf.Session
                 regularizer: regularizer to use
         """
-        self._value_func.set_up(session)
+        self._func.set_up(session)
 
         with tf.name_scope("n_step_bellman_objective"):
             # the bellman values for training value_func
@@ -165,48 +161,43 @@ class ValueGradientObjective(Objective):
                                          dtype=tf.float32,
                                          name="bellman_target_plh")
 
-            self._value_func.add_target_placeholder(bellman_plh)
+            self._func.add_target_placeholder(bellman_plh)
 
-            self._objective = tf.reduce_mean((1/2) * tf.square(bellman_plh - self._value_func.func),
+            self._objective = tf.reduce_mean((1/2) * tf.square(bellman_plh - self._func.func),
                                              name="objective")
 
             if regularizer:
-                self._objective += regularizer(self._value_func)
+                self._objective += regularizer(self._func)
 
-            gradients = self._value_func.gradients(self._objective)
-            self._gradients = tf.reduce_mean(gradients,
-                                             name="reduce_mean_gradients")
-
-            self._value_func.apply_gradients(gradients)
+            self._func.minimize(self._objective)
 
     def push(self, env_dict):
         """ Accounts for new env_dict
-        element
-
+        element and computes discounted returns
+        for elements in `_waiting_buffer` and
+        pushing them to `_replay_buffer` when their
+        returns are fully computed
             Args:
                 env_dict: sampled from `Environment`
         """
 
-        element = self._element_cls.make_element_from_env(env_dict)
-        buffer_len = self._waiting_buffer.len
+        element = self._element_cls.make_element(env_dict)
 
-        if buffer_len:
+        if self._waiting_buffer:
             self._add_reward(element.reward)
+
+        buffer_len = len(self._waiting_buffer)
 
         if element.done or buffer_len == self._steps:
             if not element.done:
                 boostrap_func = self.bootstrap_func
                 self._add_reward(boostrap_func([element.next_state]))
 
-            self._replay_buffer.push(self._waiting_buffer.sample_and_pop(buffer_len))
+            self._replay_buffer.push(self._waiting_buffer.sample(buffer_len))
+            self._waiting_buffer.clear()
 
         else:
             self._waiting_buffer.push(element)
-
-
-    def update_feed_dict(self, stacked):
-        return [{"state": stacked["state"]},
-                {"bellman_target_plh": stacked["n_step_return"]}]
 
     def optimize(self,
                  session,
@@ -221,13 +212,11 @@ class ValueGradientObjective(Objective):
         for batch in self._replay_buffer.sample_batches(batch_size,
                                                         self._iterations_of_optimization):
 
-            stacked = self._element_cls.stack(batch)
+            self._func.update(session,
+                              {"state": batch.state},
+                              {"bellman_target_plh": batch.n_step_return})
 
-            self._value_func.update(session,
-                                    {"state": stacked["state"]},
-                                    {"bellman_target_plh": stacked["n_step_return"]})
-
-
+@gin.configurable(blacklist=["upper_scope", "replay_buffer"])
 class DecoupledValueGradientObjective(ValueGradientObjective):
     """ Represents a Bellman objective
     in which the bootstrapping func is not the same
@@ -271,7 +260,7 @@ class DecoupledValueGradientObjective(ValueGradientObjective):
         self._bootstrap_func.set_up(session)
 
         self._copy = self._bootstrap_func.make_copy_op(session,
-                                                       self._value_func)
+                                                       self._func)
 
     def sync(self):
         """ Synchronizes `bootstrap_func`
@@ -279,7 +268,7 @@ class DecoupledValueGradientObjective(ValueGradientObjective):
         """
         self._copy()
 
-
+@gin.configurable(blacklist=["upper_scope", "replay_buffer"])
 class PolicyGradientObjective(Objective):
     """ Contains information related
     to specifying an objective for an
@@ -297,11 +286,6 @@ class PolicyGradientObjective(Objective):
                  iteration_of_optimization,
                  from_gradient=False):
 
-        if not isinstance(element_cls, Sarsa):
-            raise ValueError("PolicyGradientObjective requires `element_cls`"
-                             " to be an instance of `Sarsa`")
-
-        self._policy_func = policy_func
         self._policy_return = policy_return
 
         self._replay_buffer = replay_buffer
@@ -310,10 +294,15 @@ class PolicyGradientObjective(Objective):
         self._iterations_of_optimization = iteration_of_optimization
         self._from_gradient = from_gradient
 
-        self._gradients = None
-
         self._action_taken_plh = None
         self._next_state_plh = None
+
+        super().__init__(self,
+                         upper_scope,
+                         replay_buffer,
+                         element_cls,
+                         policy_func,
+                         iteration_of_optimization)
 
 
     def action_taken_plh(self, action_shape=None):
@@ -330,7 +319,7 @@ class PolicyGradientObjective(Objective):
                 self._action_taken_plh = tf.placeholder(shape=[None, action_shape],
                                                         dtype=tf.float32,
                                                         name="action_taken")
-                self._policy_func.add_target_placeholder(self._action_taken_plh)
+                self._func.add_target_placeholder(self._action_taken_plh)
 
         return self._action_taken_plh
 
@@ -348,7 +337,7 @@ class PolicyGradientObjective(Objective):
                 self._next_state_plh = tf.placeholder(shape=[None, state_shape],
                                                       dtype=tf.float32,
                                                       name="next_state")
-                self._policy_func.add_target_placeholder(self._next_state_plh)
+                self._func.add_target_placeholder(self._next_state_plh)
 
         return self._next_state_plh
 
@@ -356,21 +345,18 @@ class PolicyGradientObjective(Objective):
                session,
                regularizer=None):
 
-        self._policy_func.set_up(session)
+        self._func.set_up(session)
 
         with self._scope():
 
             if self._from_gradient:
-                gradients = self._policy_func.from_gradient_func(self._policy_return)
+                gradients = self._func.from_gradient_func(self._policy_return)
             else:
                 expected_return = tf.reduce_mean(self._policy_return,
                                                  name="reduce_mean_return")
-                gradients = self._policy_func.gradients(expected_return)
+                gradients = self._func.gradients(expected_return)
 
-            self._gradients = tf.reduce_mean(gradients,
-                                             name="reduce_mean_gradients")
-
-            self._policy_func.apply_gradients(gradients)
+            self._func.apply_gradients(gradients)
 
     def push(self, env_dict):
         """ Accounts for new env_dict
@@ -388,10 +374,10 @@ class PolicyGradientObjective(Objective):
         for batch in self._replay_buffer.sample_batches(batch_size,
                                                         self._iterations_of_optimization):
 
-            self._policy_func.update(session,
-                                     {"state": batch.state},
-                                     {"action_taken": batch.action,
-                                      "next_state": batch.next_state})
+            self._func.update(session,
+                              {"state": batch.state},
+                              {"action_taken": batch.action,
+                               "next_state": batch.next_state})
 
 
 class Objectives(Enum):
