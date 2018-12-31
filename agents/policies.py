@@ -92,7 +92,7 @@ class ValueFunction(RLFunction):
                  scope,
                  approximator,
                  state_shape,
-                 num_of_actions):
+                 num_of_actions=None):
 
 
         with scope():
