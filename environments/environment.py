@@ -7,30 +7,6 @@ class Environment(metaclass=ABCMeta):
     learn in. User can define their own environments/simulators. The simulators
     will keep track of their state in their own chosen way.
     """
-    @abstractmethod
-    def step(self, action):
-        """The Agent performs an action in the environment, modifying the MDP
-        state and resulting in a transition.
-
-            Args:
-                action : the action taken by the agent
-
-            Returns:
-                next_state :the state transitioned to
-                reward : the reward observed
-                done : whether the agent's action resulted in the episode finishing
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def reset(self):
-        """Resets the MDP internal state
-
-            Returns:
-                state: new initialized MDP state
-        """
-        raise NotImplementedError()
-
     @property
     @abstractmethod
     def dims(self):
@@ -62,8 +38,33 @@ class Environment(metaclass=ABCMeta):
 
         return [None] + list(state_shape)
 
-class ActionSpace(object, metaclass=ABCMeta):
-    """ Defines the action space of the Environment """
+    @abstractmethod
+    def step(self, action):
+        """The Agent performs an action in the environment, modifying the MDP
+        state and resulting in a transition.
+
+            Args:
+                action : the action taken by the agent
+
+            Returns:
+                next_state :the state transitioned to
+                reward : the reward observed
+                done : whether the agent's action resulted in the episode finishing
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def reset(self):
+        """Resets the MDP internal state
+
+            Returns:
+                state: new initialized MDP state
+        """
+        raise NotImplementedError()
+
+class ActionSpace(metaclass=ABCMeta):
+    """ Defines the action space of the Environment
+    """
     @abstractmethod
     def sample(self):
         """ Returns a sampled action from the space """
