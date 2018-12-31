@@ -76,11 +76,11 @@ class Objective(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-@gin.configurable(blacklist=["upper_scope"])
+@gin.configurable(blacklist=["scope"])
 class ValueGradientObjective(Objective):
     """ Used for an agent
     that need to minimize the Advantage
-    or Bellman error. The policy converges
+    or Bellman e`rror. The policy converges
     when it can accurately predict the expected
     reward given a state, value pairs.
     This is also known as the `Value Gradient`
@@ -223,7 +223,7 @@ class ValueGradientObjective(Objective):
                               {"state": batch.state},
                               {"bellman_target_plh": batch.n_step_return})
 
-@gin.configurable(blacklist=["upper_scope", "replay_buffer"])
+@gin.configurable(blacklist=["scope", "replay_buffer"])
 class DecoupledValueGradientObjective(ValueGradientObjective):
     """ Represents a Bellman objective
     in which the bootstrapping func is not the same
@@ -275,7 +275,7 @@ class DecoupledValueGradientObjective(ValueGradientObjective):
         """
         self._copy()
 
-@gin.configurable(blacklist=["upper_scope", "replay_buffer"])
+@gin.configurable(blacklist=["scope", "replay_buffer"])
 class PolicyGradientObjective(Objective):
     """ Contains information related
     to specifying an objective for an
