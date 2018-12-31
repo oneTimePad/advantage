@@ -116,6 +116,11 @@ class ReplayBuffer(Buffer):
                                             self._element_idx_to_attr_map,
                                             self._element_len)
 
+    def pop(self, batch_size):
+        popped = self._buffer[:batch_size]
+        self._buffer = self._buffer[batch_size:]
+
+
     def sample_batches(self,
                        batch_size,
                        num_batches):
@@ -134,9 +139,8 @@ class ReplayBuffer(Buffer):
     def clear(self):
         """ Clears out buffer
         """
-        old_buffer = self._buffer
-        self._buffer = np.empty(shape=self.max_buffer_size, dtype=np.float32)
-        del old_buffer
+        self._cur_buffer_size = 0
+        self._index = 0
 
 class RandomizedReplayBuffer(ReplayBuffer):
     """Allows for collecting various `Elements` made by an agent.
