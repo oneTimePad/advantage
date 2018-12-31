@@ -46,11 +46,12 @@ class ReplayBuffer(Buffer):
     (allows them to be fetched latter on)
     """
 
-    def __init__(self, element_cls, buffer_size):
+    def __init__(self, element_cls, buffer_size, init=None):
         """
             Args:
                 element_cls: subclass of `Element`
                 buffer_size: size of deque
+                init: initialize from another buffer
         """
         self._element_cls = element_cls
 
@@ -61,6 +62,9 @@ class ReplayBuffer(Buffer):
         self._index = 0
 
         self._buffer = np.empty(shape=buffer_size, dtype=np.float32)
+
+        if init: # set values from `init`
+            self._buffer[:len(init)] = init.sample(len(init))
 
         self._element_idx_to_attr_map = None
         self._element_len = None
