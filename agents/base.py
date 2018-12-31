@@ -26,11 +26,12 @@ class LearningAgent(metaclass=ABCMeta):
     name_scope = "agent"
 
     def __init__(self,
+                 scope,
                  environment,
                  graph,
-                 upper_scope,
                  local_stats):
 
+        self._scope = scope
         self._environment = environment
         self._done = True
         self._state = None
@@ -41,7 +42,6 @@ class LearningAgent(metaclass=ABCMeta):
 
         self._graph = graph
         self._session = None
-        self._agent_scope = ScopeWrap.build(upper_scope, self.name_scope)
 
         self._policy = None
 
@@ -113,10 +113,10 @@ class LearningAgent(metaclass=ABCMeta):
         return self._graph
 
     @property
-    def agent_scope(self):
-        """ property for `_agent_scope`
+    def scope(self):
+        """ property for `_scope`
         """
-        return self._agent_scope
+        return self._scope
 
     @property
     def local_stats(self):

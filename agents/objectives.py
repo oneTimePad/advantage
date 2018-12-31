@@ -26,13 +26,13 @@ class Objective(metaclass=ABCMeta):
     name_scope = None
 
     def __init__(self,
-                 upper_scope,
+                 scope,
                  replay_buffer,
                  element_cls,
                  func,
                  iteration_of_optimization):
 
-        self._scope = ScopeWrap.build(upper_scope, self.name_scope)
+        self._scope = scope
 
         self._replay_buffer = replay_buffer
         self._element_cls = element_cls
@@ -40,6 +40,12 @@ class Objective(metaclass=ABCMeta):
         self._func = func
 
         self._iterations_of_optimization = iteration_of_optimization
+
+    @property
+    def scope(self):
+        """ property for `_scope`
+        """
+        return self._scope
 
     @property
     def func(self):
@@ -80,7 +86,7 @@ class ValueGradientObjective(Objective):
     This is also known as the `Value Gradient`
     """
     def __init__(self,
-                 upper_scope,
+                 scope,
                  replay_buffer,
                  element_cls,
                  discount_factor,
@@ -114,7 +120,7 @@ class ValueGradientObjective(Objective):
         self._waiting_buffer = ReplayBuffer(element_cls, steps)
 
         super().__init__(self,
-                         upper_scope,
+                         scope,
                          replay_buffer,
                          element_cls,
                          value_func,
@@ -156,7 +162,7 @@ class ValueGradientObjective(Objective):
         """
         self._func.set_up(session)
 
-        with tf.name_scope("n_step_bellman_objective"):
+        with self._scope():
             # the bellman values for training value_func
             bellman_plh = tf.placeholder(shape=[None, 1],
                                          dtype=tf.float32,
@@ -279,7 +285,7 @@ class PolicyGradientObjective(Objective):
     name_scope = "policy_gradient_objective"
 
     def __init__(self,
-                 upper_scope,
+                 scope,
                  replay_buffer,
                  element_cls,
                  policy_func,
@@ -299,7 +305,7 @@ class PolicyGradientObjective(Objective):
         self._next_state_plh = None
 
         super().__init__(self,
-                         upper_scope,
+                         scope,
                          replay_buffer,
                          element_cls,
                          policy_func,
