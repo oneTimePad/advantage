@@ -2,8 +2,8 @@ from abc import ABCMeta, abstractmethod
 from enum import Enum
 import tensorflow as tf
 import numpy as np
+import gin
 from advantage.utils.tf_utils import ScopeWrap
-from advantage.builders.approximators import build_approximator
 
 """ Contains common policies/functions for RL agents.
 """
@@ -42,13 +42,20 @@ class RLFunction(metaclass=ABCMeta):
     def __init__(self,
                  scope,
                  approximator):
+
+        self._scope = scope
         self._approximator = approximator
         self._eval_func = None
         self._func = approximator.network
-        self._scope = scope
 
     def __getattr__(self, attr):
         return getattr(self._approximator, attr)
+
+    @property
+    def scope(self):
+        """ property for _scope
+        """
+        return self._scope
 
     @property
     def approximator(self):
@@ -73,20 +80,30 @@ class RLFunction(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-
+@gin.configurable(blacklist=["scope"])
 class ValueFunction(RLFunction):
     """ Represents a Value or Action-Value
     function
     """
 
+    name_scope = "value_function"
+
     def __init__(self,
                  scope,
                  approximator,
+                 state_shape,
                  num_of_actions):
 
 
+        with scope():
+            state_plh = tf.placeholder(shape=state_shape,
+                                       dtype=tf.float32,
+                                       name="state")
+            approx_scope = ScopeWrap.build(scope, approximator.name_scope)
+            approx_inst = approximator(approx_scope, state_plh, [state_plh])
+
         self._num_of_actions = num_of_actions
-        super().__init__(self, scope, approximator)
+        super().__init__(self, scope, approx_inst)
 
     def __call__(self,
                  session,
@@ -103,7 +120,7 @@ class ValueFunction(RLFunction):
             Args:
                 session: tf.Session
         """
-
+        self._approximator.set_up()
         with self._scope():
             num_of_actions = self._num_of_actions
             self._func = _value_layer(self._approximator.network, num_of_actions)
@@ -128,43 +145,6 @@ class ValueFunction(RLFunction):
 
         self._approximator.initialize(session)
 
-    @classmethod
-    def build(cls,
-              upper_scope,
-              approximator_config,
-              state_shape,
-              num_of_actions=1):
-        """ Constructs the Value Function
-
-            Args:
-                upper_scope : the upper ScopeWrap
-                approximator_config: config to build approximator
-                state_shape: shape of state input to approximator
-                num_of_actions : optional number of discrete actions
-                    for Action-Value functions
-
-            Returns:
-                ValueFunction
-        """
-
-        name_scope = "action_value_function" if num_of_actions else "value_function"
-
-        scope = ScopeWrap.build(upper_scope, name_scope)
-
-        with scope():
-            state_plh = tf.placeholder(shape=state_shape,
-                                       dtype=tf.float32,
-                                       name="state")
-
-            approximator = build_approximator(approximator_config,
-                                              state_plh,
-                                              [state_plh])
-
-        return cls(scope,
-                   approximator,
-                   num_of_actions)
-
-
 class ContinousActionValueFunction(RLFunction):
     """ Represents an Action-Value Function (Q)
     that has a continuous action as it's input
@@ -172,11 +152,12 @@ class ContinousActionValueFunction(RLFunction):
     Learning and DDPG
     """
 
+    name_scope = "continuous_action_value_function"
+
     def __init__(self,
                  scope,
                  approximator,
                  has_action_source=False):
-
 
         self._has_action_source = has_action_source
         super().__init__(self, scope, approximator)
@@ -222,10 +203,11 @@ class ContinousActionValueFunction(RLFunction):
 
         self._approximator.initialize(session)
 
+    @gin.configurable(blacklist=["scope", "state_shape", "action_shape"])
     @classmethod
     def build(cls,
-              upper_scope,
-              approximator_config,
+              scope,
+              approximator,
               state_shape,
               action_shape):
         """ Constructs the Value Function
@@ -240,10 +222,6 @@ class ContinousActionValueFunction(RLFunction):
                 ContinousActionValueFunction
         """
 
-        name_scope = "continuous_action_value_function"
-
-        scope = ScopeWrap.build(upper_scope, name_scope)
-
         with scope():
             state_plh = tf.placeholder(shape=state_shape,
                                        dtype=tf.float32,
@@ -255,17 +233,19 @@ class ContinousActionValueFunction(RLFunction):
 
             concat = tf.concat([state_plh, action_plh], axis=1)
 
-            approximator = build_approximator(approximator_config,
-                                              concat,
-                                              [state_plh, action_plh])
+        approx_scope = ScopeWrap.build(scope, approximator.name_scope)
+        approx_inst = approximator(approx_scope,
+                                   concat,
+                                   [state_plh, action_plh])
 
         return cls(scope,
-                   approximator)
+                   approx_inst)
 
+    @gin.configurable(blacklist=["scope", "state_shape"])
     @classmethod
     def build_from_action_source(cls,
-                                 upper_scope,
-                                 approximator_config,
+                                 scope,
+                                 approximator,
                                  state_shape,
                                  action_func):
         """ Constructs the Value Function with an action
@@ -276,18 +256,14 @@ class ContinousActionValueFunction(RLFunction):
         and action.
 
             Args:
-                upper_scope : the upper ScopeWrap
-                approximator_config: config to build approximator
+                scope : ScopeWrap
+                approximator: approximator from gin
                 state_shape: shape of state input to approximator
-                action_shape: shape of action input to approximator
+                action_func: action RLFunction
 
             Returns:
                 ContinousActionValueFunction
         """
-
-        name_scope = "continuous_action_value_function"
-
-        scope = ScopeWrap.build(upper_scope, name_scope)
 
         with scope():
             state_plh = tf.placeholder(shape=state_shape,
@@ -296,28 +272,42 @@ class ContinousActionValueFunction(RLFunction):
 
             concat = tf.concat([state_plh, action_func.network], axis=1)
 
-            approximator = build_approximator(approximator_config,
-                                              concat,
-                                              [state_plh])
+        approx_scope = ScopeWrap.build(scope, approximator.name_scope)
+        approx_inst = approximator(approx_scope,
+                                   concat,
+                                   [state_plh])
 
         return cls(scope,
-                   approximator,
+                   approx_inst,
                    has_action_source=True)
 
 
+@gin.configurable(blacklist=["scope", "state_shape", "action_shape"])
 class ContinuousRealPolicy(RLFunction):
     """ Policy that outputs a Real Number
     useful for parameterizing means
     """
 
+    name_scope = "continuous_real_policy_function"
+
     def __init__(self,
                  scope,
                  approximator,
+                 state_shape,
                  action_shape):
 
-
         self._action_shape = action_shape
-        super().__init__(self, scope, approximator)
+
+        with scope():
+            state_plh = tf.placeholder(shape=state_shape,
+                                       dtype=tf.float32,
+                                       name="state")
+        approx_scope = ScopeWrap.build(scope, approximator.name_scope)
+        approx_inst = approximator(approx_scope,
+                                   state_plh,
+                                   [state_plh])
+
+        super().__init__(self, scope, approx_inst)
 
 
     def __call__(self,
@@ -343,44 +333,6 @@ class ContinuousRealPolicy(RLFunction):
 
         self._approximator.initialize(session)
 
-    @classmethod
-    def build(cls,
-              upper_scope,
-              approximator_config,
-              state_shape,
-              action_shape):
-        """ Constructs the Value Function
-
-            Args:
-                upper_scope : the upper ScopeWrap
-                approximator_config: config to build approximator
-                state_shape: shape of state input to approximator
-                action_shape: shape of action input to approximator
-
-            Returns:
-                ContinuousRealPolicy
-        """
-
-        name_scope = "continuous_real_policy_function"
-
-        scope = ScopeWrap.build(upper_scope, name_scope)
-
-        with scope():
-            state_plh = tf.placeholder(shape=state_shape,
-                                       dtype=tf.float32,
-                                       name="state")
-
-
-            approximator = build_approximator(approximator_config,
-                                              state_plh,
-                                              [state_plh])
-
-        return cls(scope,
-                   approximator,
-                   action_shape)
-
-
-
 class ProbabilisticPolicy(RLFunction):
     """ Represents a
     policy that selects actions
@@ -388,6 +340,21 @@ class ProbabilisticPolicy(RLFunction):
     distribution
     """
     name_scope = None
+
+    def __init__(self,
+                 scope,
+                 approximator,
+                 state_shape):
+        with scope():
+            state_plh = tf.placeholder(shape=state_shape,
+                                       dtype=tf.float32,
+                                       name="state")
+        approx_scope = ScopeWrap.build(scope, approximator.name_scope)
+        approx_inst = approximator(approx_scope,
+                                   state_plh,
+                                   [state_plh])
+
+        super().__init__(self, scope, approx_inst)
 
     def __call__(self,
                  session,
@@ -422,38 +389,7 @@ class ProbabilisticPolicy(RLFunction):
 
         self._approximator.initialize(session)
 
-    @classmethod
-    def build(cls,
-              upper_scope,
-              approximator_config,
-              state_shape):
-
-        """ Constructs the Value Function
-
-            Args:
-                name_scope : name scope
-                upper_scope : the upper ScopeWrap
-                approximator_config: config to build approximator
-                state_shape: shape of state input to approximator
-
-            Returns:
-                ProbabilisticPolicy
-        """
-
-        scope = ScopeWrap.build(upper_scope, cls.name_scope)
-
-        with scope():
-            state_plh = tf.placeholder(shape=state_shape,
-                                       dtype=tf.float32,
-                                       name="state")
-
-            approximator = build_approximator(approximator_config,
-                                              state_plh,
-                                              [state_plh])
-
-        return cls(scope,
-                   approximator)
-
+@gin.configurable(blacklist=["scope", "state_shape"])
 class MultinomialPolicy(ProbabilisticPolicy):
     """ Policy on N-actions
     """
@@ -506,6 +442,7 @@ class MultinomialPolicy(ProbabilisticPolicy):
 
         self._eval_func = sample
 
+@gin.configurable(blacklist=["scope", "state_shape"])
 class BernoulliPolicy(ProbabilisticPolicy):
     """ Policy on 2 actions.
         An alternative to MultinomialPolicy
@@ -554,7 +491,7 @@ class BernoulliPolicy(ProbabilisticPolicy):
 
         self._eval_func = sample
 
-
+@gin.configurable(blacklist=["scope", "state_shape"])
 class GaussianPolicy(ProbabilisticPolicy):
     """ Continuous Gaussian Policy
     """
@@ -640,6 +577,8 @@ class GaussianPolicy(ProbabilisticPolicy):
         self._eval_func = sample
 
 class Policies(Enum):
+    """Possible Policies to select
+    """
     VALUE = ValueFunction
     CONT_ACTION_VALUE = ContinousActionValueFunction
     CONT_REAL = ContinuousRealPolicy
