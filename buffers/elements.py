@@ -11,30 +11,29 @@ by the Element class. So the client only has to import one module.
 
 _STDDEV_EPS = 0.001 # floor stddev to avoid div-by-zero
 
-def _normalize(attribute, normalization_dict, stats, mutate):
+def _normalize(attribute, value, stats, mutate, out=None):
     """ Performs actual normalization
             Args:
                 attribute: attr name
-                normalization_dict: dict to contain normalizaed values
+                value: value to normalize
                 stats: {"mean": .., "stddev": ...}
                 mutate: whether to give normalization a copy
                     of the value to normalize or mutate it
-
-            Modifies normalization_dict
+                out: dict to output value to {attribute : norm_value}
     """
 
     if "mean" in stats:
         if not mutate:
-            normalization_dict[attribute] = normalization_dict - stats["mean"]
+            out[attribute] = value - stats["mean"]
         else:
-            normalization_dict[attribute] -= stats["mean"]
+            value -= stats["mean"]
 
     if "stddev" in stats:
         stddev = np.maximum(_STDDEV_EPS, stats["stddev"])
         if not mutate:
-            normalization_dict[attribute] = normalization_dict[attribute] / stddev
+            out[attribute] = value / stddev
         else:
-            normalization_dict[attribute] /= stddev
+            value /= stddev
 
 class ElementAttr:
     """ Mixin for a Element that uses Numpy.ndarray
@@ -171,6 +170,66 @@ class ElementStats:
         return fetched_stats
 
 
+class ElementIter:
+    """ Iterator for `Element`
+    """
+    def __init__(self, elem):
+        self._element = elem
+        self._idx = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            item = self._element[self._idx]
+        except IndexError:
+            raise StopIteration()
+        self._idx += 1
+        return item
+
+@attr.s
+class ElementIdxAttrMapEntry:
+    """ Entry for idx_to_attr_map
+    containg all info to identify
+    an entry in the `Element`
+    """
+    attribute = attr.ib(kw_only=True)
+    cond_fn = attr.ib(kw_only=True)
+    max = attr.ib(kw_only=True)
+    min = attr.ib(kw_only=True)
+
+
+def build_idx_to_attr_map(elem):
+    """ Builds the index to attribute map used
+    by an `Element`'s __getitem__.
+    This only needs to be called for the first
+    element added to the buffer. Other `Element`'s
+    can use the result.
+        Args:
+            element: element to compute the map for
+
+        Returns:
+            (length: total index length (number of columns), the map)
+    """
+    length = sum([getattr(element, attribute).shape[1] for attribute in elem.attributes])
+    attributes = elem.attributes
+    idx_to_attr_map = [ElementIdxAttrMapEntry(attribute=attributes[0],
+                                              cond_fn=lambda idx: 0 <= idx < getattr(element, attributes[0]).shape[1],
+                                              max=getattr(element, attributes[0]).shape[1],
+                                              min=0)]
+
+    for prev, cur in zip(idx_to_attr_map, attributes[1:]):
+        new_max = prev.max + getattr(element, cur).shape[1]
+
+        cond_fn = lambda idx, prev=prev, new_max=new_max: prev.max <= idx < new_max
+        idx_to_attr_map.append(ElementIdxAttrMapEntry(attribute=cur,
+                                                      cond_fn=cond_fn,
+                                                      max=new_max,
+                                                      min=prev.max))
+
+    return length, idx_to_attr_map
+
 def element(cls):
     """ Class Decorator for making an `Element`
     """
@@ -187,8 +246,40 @@ def element(cls):
         def __init__(self, **kwargs):
             self._wrapped = cls(**kwargs)
 
+            self.len = None
+            self.idx_to_attr_map = []
+
         def __getattr__(self, attribute):
             return getattr(self._wrapped, attribute)
+
+        def __len__(self):
+            if not self.len:
+                raise AttributeError("len attribute must be set"
+                                     " this is done by using the result"
+                                     " from `build_idx_to_attr_map`")
+            return self._len
+
+        def __iter__(self):
+            return ElementIter(self)
+
+        def __getitem__(self, idx):
+            if not self.idx_to_attr_map:
+                raise AttributeError("idx_to_attr_map attribute must be set"
+                                     " this is done by using the result"
+                                     " from `build_idx_to_attr_map`")
+
+            if not isinstance(idx, int):
+                raise ValueError("`idx` must be of type `int`"
+                                 "not %s" % type(idx))
+
+            entry = next(x for x in self.idx_to_attr_map if x.cond_fn(idx))
+
+            attr_entry = getattr(self, entry.attribute)
+
+            if len(attr_entry.shape) > 1:
+                return attr_entry[:, idx - entry.min]
+
+            return attr_entry[idx - entry.min]
 
         @property
         def attributes(self):
@@ -266,104 +357,91 @@ def element(cls):
 
             return fetched_stats
 
-
         @classmethod
-        def stack(cls, element_list):
-            """ Combines common np_attrs in the elements in the list
-            into one np_attr (stacked np.ndarray)
+        def from_numpy(cls, ndarray, idx_to_attr_map=None, length=None):
+            """ Builds `Element` from a 2D-numpy ndarray
+            useful creating a `stacked` element
+                    Args:
+                        ndarray: the 2D array
+                        idx_to_attr_map: the index-to-attr mapping
+                        length: element len
 
-                Args:
-                    element_list: list of BufferElement's to reduce
-                    normalize_attrs: attrs to normalize just in stack
-
-                Returns:
-                    reduced Element with
-
-                Raises:
-                    ValueError: not all element types match in
-                        `element_list`
-
+                    Returns:
+                        `Element` instance
             """
-            stacked_dict = {attribute.name: [] for attribute in attr.fields_dict(cls).keys()}
-
-            for elem in element_list:
-                if not isinstance(elem, cls):
-                    raise ValueError("all elements in `element_list`"
-                                     " must be an instance of %s" % cls)
-
-                for attribute, stacked_list in stacked_dict.items():
-                    stacked_list.append(getattr(elem, attribute))
-
-            return cls.make_element_from_dict({k: np.vstack(v) for k, v in stacked_dict.items()})
+            kwargs = {entry.attribute: ndarray[:, entry.min:entry.max] for entry in idx_to_attr_map}
+            elem = cls(**kwargs)
+            elem.idx_to_attr_map = idx_to_attr_map
+            elem.len = length
+            return elem
 
 
         @classmethod
-        def stack_run_normalize(cls, stacked, element_stats=None, mutate=False):
+        def running_normalize(cls, elem, element_stats=None, mutate=True):
             """ Normalize a `stack` of elements
             from `cls.stack` using running stats
                 Args:
-                    stacked: stacked dict of elements
+                    elem: `Element`(s)
                     element_stats : `ElementStats` object (if any)
                     mutate: whether to mutate stack or use copies
 
                 Returns:
-                    normalized stack
+                    normalized element if mutate=False
             """
             normalization = {}
-            attr_metadata = attr.fields_dict(cls)
 
-            for attribute, value in stacked.items():
-                norm_type = attr_metadata[attribute]
+            attr_data = attr.fields_dict(cls)
+
+            for attribute, value in attr_data.items():
+
+                data = getattr(elem, attribute)
+
                 stats = {}
-
-                if norm_type is ElementNormType.RUNNING_NORMALIZE:
+                if value.metadata["normalization"] is ElementNormType.RUNNING_NORMALIZE:
                     stats = element_stats.fetch_stats(attribute)
 
-                normalization[attribute] = value
+                    _normalize(attribute,
+                               data,
+                               stats,
+                               mutate,
+                               out=normalization)
+                else:
+                    normalization[attribute] = data
 
-                _normalize(attribute, normalization, stats, mutate)
-
-                return normalization
-
-        @classmethod
-        def elem_run_normalize(cls, elem, element_stats=None, mutate=False):
-            """ Normalize a single element using running stats
-                Args:
-                    elem: `Element`
-                    element_stats : `ElementStats` object (if any)
-                    mutate: whether to mutate stack or use copies
-
-                Returns:
-                    normalized element
-            """
-            return cls.stack_run_normalize(cls.unzip_to_dict(elem), element_stats, mutate)
+            return normalization if not mutate else None
 
         @classmethod
-        def stack_batch_normalize(cls, stacked, mutate=False):
+        def batch_normalize(cls, elem, mutate=False):
             """ Normalize a `stack` of elements
             from `cls.stack` using batch stats
                 Args:
-                    stacked: stacked dict of elements
+                    elem: `Element`(s)
                     mutate: whether to mutate stack or use copies
 
                 Returns:
-                    normalized stack
+                    normalized element if mutate=False
             """
             normalization = {}
-            attr_metadata = attr.fields_dict(cls)
 
-            for attribute, value in stacked.items():
-                norm_type = attr_metadata[attribute]
+            attr_data = attr.fields_dict(cls)
+
+            for attribute, value in attr_data.items():
+
+                data = getattr(elem, attribute)
+
                 stats = {}
+                if value.metadata["normalization"] is ElementNormType.BATCH_NORMALIZE:
+                    stats = cls._fetch_batch_stats(attribute, data)
 
-                if norm_type is ElementNormType.BATCH_NORMALIZE:
-                    stats = cls._fetch_batch_stats(attribute, stacked)
+                    _normalize(attribute,
+                               data,
+                               stats,
+                               mutate,
+                               out=normalization)
+                else:
+                    normalization[attribute] = data
 
-                normalization[attribute] = value
-
-                _normalize(attribute, normalization, stats, mutate)
-
-                return normalization
+            return normalization if not mutate else None
 
         @classmethod
         def build_stats(cls):

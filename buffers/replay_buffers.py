@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
-import collections
-import random
+import numpy as np
+from advantage.buffers.elements import build_idx_to_attr_map
 
 """ This module contains `Replay Buffers`. These
 buffer take in `Element`s and replay them to the agent
@@ -21,70 +21,55 @@ class Buffer(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    @property
-    def num_elements(self):
-        """ property for current
-        buffer length
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def push(self, item):
+    def push(self, element):
         """Appends and element to the buffer
             Args:
-                item: item to added
+                element: `Element` to add
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def sample(self, batch_size, sample_less=False):
+    def sample(self, batch_size):
         """Sample a determinstic batch of Sarsa tuples
             Args:
                 batch_size: number of samples to collect
-                sample_less: whether to allow sampling less than requested amount
-
-            Raises:
-                ValueError: invalid amount of samples requested
-                    and sample_less is False
 
             Returns:
                 list of Elements
         """
         raise NotImplementedError()
 
-    @abstractmethod
-    def sample_and_pop(self, batch_size, sample_less=False):
-        """ Sample a determinstic batch of Sarsa tuple and remove them
-                Args:
-                    batch_size: number of samples to collect
-                    sample_less: whether to allow sampling less than requested amount
 
-                Raises:
-                    ValueError: invalid amount of samples requested
-                        and sample_less is False
-
-                Returns:
-                    list of Elements
-        """
-        raise NotImplementedError()
-
-
+# Reference: https://github.com/ageron/handson-ml/blob/master/16_reinforcement_learning.ipynb
 class ReplayBuffer(Buffer):
     """ Stores Elements and Replays them
     (allows them to be fetched latter on)
     """
 
-    def __init__(self, buffer_size):
+    def __init__(self, element_cls, buffer_size):
         """
             Args:
+                element_cls: subclass of `Element`
                 buffer_size: size of deque
         """
+        self._element_cls = element_cls
 
         self._max_buffer_size = buffer_size
 
         self._cur_buffer_size = 0
 
-        self._buffer = collections.deque([], maxlen=buffer_size)
+        self._index = 0
+
+        self._buffer = np.empty(shape=buffer_size, dtype=np.float32)
+
+        self._element_idx_to_attr_map = None
+        self._element_len = None
+
+    def __len__(self):
+        """ property for the number of elements
+        `_cur_buffer_size`
+        """
+        return self._cur_buffer_size
 
     @property
     def max_buffer_size(self):
@@ -92,82 +77,44 @@ class ReplayBuffer(Buffer):
         """
         return self._max_buffer_size
 
-    @property
-    def num_elements(self):
-        """ property for the number of elements
-        `_cur_buffer_size`
-        """
-        return self._cur_buffer_size
-
-    def push(self, item):
-        """Appends and element to the buffer
-            Args:
-                item: item to add of type 'buffer_type'
-        """
+    def push(self, element):
         if self._cur_buffer_size < self._max_buffer_size:
             self._cur_buffer_size += 1
 
-        self._buffer.append(item)
+        if not self._element_idx_to_attr_map:
+            self._element_len, self._element_idx_to_attr_map = build_idx_to_attr_map(element)
 
-    def sample(self, batch_size, sample_less=False):
-        """ Samples a batch of  `Elements` from buffer
+        element.idx_to_attr_map = self._element_idx_to_attr_map
+        element.len = self._element_len
+
+        self._buffer[self._index] = element
+        self._cur_buffer_size = min(self._cur_buffer_size + 1, self._max_buffer_size)
+        self._index = (self._index + 1) % self._max_buffer_size
+
+    def sample_from_indices(self, indices):
+        """ Samples batch of `Elements` from buffer
+        using the list of `indices`.
             Args:
-                batch_size: number of samples to collect
-                sample_less: whether to allow sampling less than requested amount
+                indices: list of indices to select from buffer
 
-            Raises:
-                ValueError: invalid amount of samples requested
-                    and sample_less is False
+            Raise:
+                IndexError: if an index is out of bounds
 
             Returns:
-                list of a Sarsa tuples
+                `Element`
         """
-        if not sample_less and batch_size > self._cur_buffer_size:
-            raise ValueError("Specify sample_less=True to retrieve less than specified amount")
+        return self._element_cls.from_numpy(self._buffer[indices],
+                                            self._element_idx_to_attr_map,
+                                            self._element_len)
 
-        if not sample_less:
-            batch = list(self._buffer)[:batch_size]
-        else:
-            batch = list(self._buffer)
-
-        return batch
-
-    def sample_and_pop(self, batch_size, sample_less=False):
-        """ Sample a batch of `Elements` from buffer and  remove them
-                Args:
-                    batch_size: number of samples to collect
-                    sample_less: whether to allow sampling less
-                        than requested amount
-
-                Raises:
-                    ValueError: invalid amount of samples requested
-                        and sample_less is False
-
-                Returns:
-                    list of Sarsa tuples
-        """
-        if not sample_less and batch_size > self._cur_buffer_size:
-            raise ValueError("Specify sample_less=True to retrieve less than specified amount")
-
-        batch = []
-        if not sample_less:
-            for _ in range(batch_size):
-                batch.append(self._buffer.popleft())
-        else:
-            for _ in range(self._cur_buffer_size):
-                batch.append(self._buffer.popleft())
-
-        batch_size = batch_size if batch_size <= self._cur_buffer_size else self._cur_buffer_size
-
-        self._cur_buffer_size -= batch_size
-
-        return batch
+    def sample(self, batch_size):
+        return self._element_cls.from_numpy(self._buffer[np.arange(batch_size)],
+                                            self._element_idx_to_attr_map,
+                                            self._element_len)
 
     def sample_batches(self,
                        batch_size,
-                       num_batches=None,
-                       sample_less=False,
-                       pop=True):
+                       num_batches):
         """ Generator for sampling batches of `Elements` from buffer
 
                 Args:
@@ -175,27 +122,17 @@ class ReplayBuffer(Buffer):
                         per yield
                     num_batches: number of batches to fetch
                         `None` means fetch until buffer is empty
-                    sample_less: whether to allow sampling less
-                        than requested amount
-                    pop: whether to remove elements from batch
         """
-        num_batches_in_buffer = self.num_elements // batch_size
 
-        if num_batches > num_batches_in_buffer:
-            num_batches = None # requesting more than is in buffer, mean take all of it
-
-        if not num_batches:
-            # check if there is an remainder in the buffer
-            num_batches = num_batches_in_buffer + int((self.num_elements % batch_size) != 0)
-
-        sample_func = self.sample_and_pop if pop else self.sample
         for _ in range(num_batches):
-            yield sample_func(batch_size)
+            yield self.sample(batch_size)
 
-        # whether we should return the remainder
-        if sample_less and num_batches > num_batches_in_buffer:
-            yield sample_func(batch_size, sample_less=True)
-
+    def clear(self):
+        """ Clears out buffer
+        """
+        old_buffer = self._buffer
+        self._buffer = np.empty(shape=self.max_buffer_size, dtype=np.float32)
+        del old_buffer
 
 class RandomizedReplayBuffer(ReplayBuffer):
     """Allows for collecting various `Elements` made by an agent.
@@ -204,34 +141,13 @@ class RandomizedReplayBuffer(ReplayBuffer):
     A.K.A Experience Replay Buffer
     """
 
-    def sample(self, batch_size, sample_less=False):
+    def sample(self, batch_size):
         """Randomly samples a batch of Sarsa tuples
             Args:
                 batch_size: number of samples to collect
-                sample_less: whether to allow sampling less than requested amount
-
-            Raises:
-                ValueError: invalid amount of samples requested
-                    and sample_less is False
 
             Returns:
-                list of a Sarsa tuples
+                list of a `Elements`
         """
-        random.shuffle(self._buffer)
-        return super().sample(batch_size, sample_less=sample_less)
-
-    def sample_and_pop(self, batch_size, sample_less=False):
-        """ Sample a random batch of Sarsa tuple and remove them
-                Args:
-                    batch_size: number of samples to collect
-                    sample_less: whether to allow sampling less than requested amount
-
-                Raises:
-                    ValueError: invalid amount of samples requested
-                        and sample_less is False
-
-                Returns:
-                    list of Sarsa tuples
-        """
-        random.shuffle(self._buffer)
-        return super().sample_and_pop(batch_size, sample_less=sample_less)
+        indices = np.random.randint(len(self), size=batch_size)
+        return super().sample_from_indices(indices)
