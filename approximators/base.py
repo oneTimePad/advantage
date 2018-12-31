@@ -87,12 +87,21 @@ def deep_approximator(cls):
         """ Interface for deep approximators to be used for value, policies, meta-losses, etc...
         """
 
-        def __init__(self, scope, architecture, optimizer=None):
+        def __init__(self,
+                     scope,
+                     architecture,
+                     tensor_inputs,
+                     inputs_placeholders,
+                     optimizer=None):
             self._scope = scope
+
+            self._architecture = architecture
 
             self._network = None # output of TF sub-graph network
 
-            self._inputs_placeholders = []
+            self._tenor_inputs = tensor_inputs
+
+            self._inputs_placeholders = inputs_placeholders
 
             self._update_target_placeholders = [] # placeholders for targets in parameter updates
 
@@ -103,7 +112,7 @@ def deep_approximator(cls):
             self._optimizer = optimizer() if optimizer else None
 
             self._loss = None
-            self._mean_applied_gradients = None
+
             self._init_op = None
             self._train_op = None
 
@@ -112,7 +121,6 @@ def deep_approximator(cls):
                                           " `set_up(self, architecture, tensor_inputs, inputs_placeholders)`")
 
             self._wrapped = cls()
-            self._wrapped.architecture = None
 
             self.__class__.__name__ = self._wrapped.__class__.__name__
             self.__class__.__doc__ = self._wrapped.__class__.__doc__
@@ -197,22 +205,21 @@ def deep_approximator(cls):
             """
             return _produce_feed_dict(runtime_tensor_targets, self._update_target_placeholders)
 
-        def set_up(self, tensor_inputs, inputs_placeholders):
+        def set_up(self):
             """ Wraps around the implemented set_up method in `DeepApproximator`
-                interface. Provides access to the specific model config
-                via the `config` attribute of `_wrapped` set by this method.
-                    Args:
-                        tensor_inputs: inputs to the network
-                        inputs_placeholders: list, the required placeholders to fill before running
-                            [used by _set_up]
+                interface. Provides access to the architecture,
+                tensor_inputs (inputs to the network) and
+                inputs_placeholders (list, the required placeholders to fill before running
+                            [used by _set_up])
 
             """
 
             with self._scope():
-                last_block = self._wrapped.set_up(tensor_inputs,
-                                                  inputs_placeholders)
+                last_block = self._wrapped.set_up(self._architecture,
+                                                  self._tensor_inputs,
+                                                  self._inputs_placeholders)
 
-            self._post_set_up(inputs_placeholders,
+            self._post_set_up(self._inputs_placeholders,
                               last_block)
 
 

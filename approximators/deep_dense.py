@@ -18,6 +18,8 @@ class DenseBlock:
 class DeepDense:
     """ Fully-connected Network"""
 
+    name_scope = "deep_convolutional"
+
     def set_up(self, architecture, tensor_inputs, inputs_placeholders):
         """ TensorFlow construction of the approximator network
                 Args:
