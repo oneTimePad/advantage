@@ -307,13 +307,6 @@ def element(cls):
             return self.make_element_from_dict(self.unzip_to_dict())
 
         @classmethod
-        def make_element_from_dict(cls, dictionary):
-            """ Factory: consructs element from dict of
-            corresponding attrs
-            """
-            return cls.make_element(**dictionary)
-
-        @classmethod
         def make_element(cls, **kwargs):
             """ Factory: Instantiates a Element of subclass 'cls'
                     Up to the subclass how it wants to handle data-sources.
