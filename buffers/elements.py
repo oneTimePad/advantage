@@ -16,7 +16,7 @@ def _normalize(attribute, value, stats, mutate, out=None):
             Args:
                 attribute: attr name
                 value: value to normalize
-                stats: {"mean": .., "stddev": ...}
+                stats: {"mean": ..., "stddev": ...}
                 mutate: whether to give normalization a copy
                     of the value to normalize or mutate it
                 out: dict to output value to {attribute : norm_value}
@@ -234,7 +234,7 @@ def element(cls):
     """ Class Decorator for making an `Element`
     """
 
-    cls = attr.s(cls, frozen=True)
+    cls = attr.s(cls)
 
     class Element:
         """ Represents a type to be placed in a Replay buffer (however, they can be used
