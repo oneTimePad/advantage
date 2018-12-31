@@ -1,10 +1,8 @@
 from abc import ABCMeta
 from abc import abstractmethod
-import os
 import tensorflow as tf
-from advantage.utils.proto_parsers import parse_which_one
+import gin
 from advantage.utils.tf_utils import build_init_uninit_op, strip_and_replace_scope
-from advantage.approximators.base.utils import parse_optimizer
 from advantage.exception import AdvantageError
 import advantage.loggers as loggers
 
@@ -84,16 +82,15 @@ def deep_approximator(cls):
     # reason-disabled: most of the public methods are properties
     # pylint: disable=too-many-instance-attributes
     # reason-disabled: all attrs are needed
+    @gin.configurable
     class _DeepApproximator:
         """ Interface for deep approximators to be used for value, policies, meta-losses, etc...
         """
 
-        def __init__(self, graph, config, approximator_scope):
-            self._config = config
-            self._graph = graph
-            self._network = None # output of TF sub-graph network
+        def __init__(self, scope, architecture, optimizer=None):
+            self._scope = scope
 
-            self._approximator_scope = approximator_scope
+            self._network = None # output of TF sub-graph network
 
             self._inputs_placeholders = []
 
@@ -103,22 +100,19 @@ def deep_approximator(cls):
 
             self._copy_ops = {}
 
-            self._learning_rate = config.learning_rate
-
-            name_scope = approximator_scope.name_scope
-
-            optimizer = parse_optimizer(config.optimizer)
-
-            self._optimizer = optimizer(name_scope)(self._learning_rate)
+            self._optimizer = optimizer() if optimizer else None
 
             self._loss = None
             self._mean_applied_gradients = None
             self._init_op = None
             self._train_op = None
 
+            if not hasattr(cls, "set_up"):
+                raise NotImplementedError("%s must implement"
+                                          " `set_up(self, architecture, tensor_inputs, inputs_placeholders)`")
 
             self._wrapped = cls()
-            self._wrapped.config = None
+            self._wrapped.architecture = None
 
             self.__class__.__name__ = self._wrapped.__class__.__name__
             self.__class__.__doc__ = self._wrapped.__class__.__doc__
@@ -127,34 +121,16 @@ def deep_approximator(cls):
             return getattr(self._wrapped, attr)
 
         @property
-        def config(self):
-            """ propety for `_config`
-            """
-            return self._config
-
-        @property
         def inputs_placeholders(self):
             """ property `_inputs_placeholders`
             """
             return self._inputs_placeholders
 
         @property
-        def learning_rate(self):
-            """ property `_learning_rate `
-            """
-            return self._learning_rate
-
-        @property
-        def mean_applied_gradients(self):
-            """ property `_mean_applied_gradients`
-            """
-            return self._mean_applied_gradients
-
-        @property
-        def approximator_scope(self):
+        def scope(self):
             """ property `_approximator_scope`
             """
-            return self._approximator_scope
+            return self._scope
 
         @property
         def network(self):
@@ -163,7 +139,7 @@ def deep_approximator(cls):
             return self._network
 
         @property
-        def trainable_parameters(self): #TODO add support for selecting variables to train
+        def trainable_parameters(self):
             """ property `_trainable_parameters`
             """
             return self._trainable_variables
@@ -179,12 +155,6 @@ def deep_approximator(cls):
             """ property `_init_op `
             """
             return self._init_op
-
-        @property
-        def name_scope(self):
-            """ property to get name_scope
-            """
-            return self._approximator_scope.name_scope
 
         def _post_set_up(self, inputs_placeholders, last_block):
             """ Completes network setup procedures after tf has built
@@ -203,7 +173,7 @@ def deep_approximator(cls):
             self._inputs_placeholders = inputs_placeholders
 
             # build optimizer and add output
-            with self._approximator_scope():
+            with self._scope():
 
                 self._network = last_block
 
@@ -227,7 +197,6 @@ def deep_approximator(cls):
             """
             return _produce_feed_dict(runtime_tensor_targets, self._update_target_placeholders)
 
-
         def set_up(self, tensor_inputs, inputs_placeholders):
             """ Wraps around the implemented set_up method in `DeepApproximator`
                 interface. Provides access to the specific model config
@@ -239,12 +208,7 @@ def deep_approximator(cls):
 
             """
 
-            model_config = getattr(self._config,
-                                   parse_which_one(self._config, "approximator"))
-
-            self._wrapped.config = model_config
-
-            with self._approximator_scope():
+            with self._scope():
                 last_block = self._wrapped.set_up(tensor_inputs,
                                                   inputs_placeholders)
 
@@ -299,7 +263,7 @@ def deep_approximator(cls):
             if not isinstance(session, tf.Session):
                 raise ValueError("Must pass in tf.Session")
 
-            with self._approximator_scope():
+            with self._scope():
                 vars_in_scope = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                                                   scope=self.name_scope)
 
@@ -321,7 +285,7 @@ def deep_approximator(cls):
                     gradients tensor
             """
 
-            with self._approximator_scope():
+            with self._scope():
                 self._loss = None
                 return [(gradient_func(param), param) for param in self.trainable_parameters]
 
@@ -344,11 +308,7 @@ def deep_approximator(cls):
                     Args:
                         gradients in proper tensorflow format
             """
-            with self._approximator_scope():
-                self._mean_applied_gradients = [(tf.reduce_mean(gradient,
-                                                                axis=1,
-                                                                name="reduce_mean_gradients"),
-                                            v) for gradient, v in gradients]
+            with self._scope():
                 global_step = tf.train.get_or_create_global_step()
                 summary, loss_avg = _avg_loss_summary(self._loss)
                 with tf.control_dependencies([loss_avg]):
@@ -360,7 +320,7 @@ def deep_approximator(cls):
                     Args:
                         loss: loss to minimize
             """
-            with self._approximator_scope():
+            with self._scope():
                 self._loss = loss
                 global_step = tf.train.get_or_create_global_step()
                 summary, loss_avg = _avg_loss_summary(loss)
@@ -369,22 +329,6 @@ def deep_approximator(cls):
                                                                         var_list=self.trainable_parameters,
                                                                         global_step=global_step)]
 
-
-        def fetch_mean_gradient(self, session, runtime_inputs, runtime_targets):
-            """ Perform a network parameter update
-                    Args:
-                        runtime_inputs: usually training batch inputs containg
-                           placeholders and values
-                        runtime_targets: training batch targets
-
-                    Returns:
-                        list(tuple(mean_applied_gradient, variable_with_repsect_to))
-            """
-            runtime_batch = {}
-            runtime_batch.update(self._produce_input_feed_dict(runtime_inputs))
-            runtime_batch.update(self._produce_target_feed_dict(runtime_targets))
-
-            return session.run(self._mean_applied_gradients, feed_dict=runtime_batch)
 
 
         @loggers.value(loggers.LogVarType.RETURNED_VALUE,
@@ -428,26 +372,3 @@ def deep_approximator(cls):
             return session.run(self._network, feed_dict=feed_dict)
 
     return _DeepApproximator
-
-# pylint: disable=too-few-public-methods
-# reason-disabled: represents just an interface
-class DeepApproximator(metaclass=ABCMeta):
-    """ Interface for Deep Approximators
-    """
-    config = None # set by _DeepApproximator set_up method
-
-    @abstractmethod
-    def set_up(self, tensor_inputs, inputs_placeholders):
-        """ TensorFlow construction of the approximator network
-                Args:
-                    tensor_inputs: actual input to the network
-                    inputs_placeholders: list, the required placeholders to fill before running.
-                        These are the placholders that the tensor_inputs depend on.
-
-                Returns:
-                    the last block in the network
-
-                Raises:
-                    NotImplementedError: must be implemented
-        """
-        raise NotImplementedError()
