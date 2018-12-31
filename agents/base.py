@@ -1,7 +1,8 @@
-import gin
 from abc import ABCMeta, abstractmethod
-from utils.decorator_utils import parameterized
-
+import tensorflow as tf
+import gin
+from advantage.utils.tf_utils import ScopeWrap
+from advantage.loggers import loggers
 """ This module represents the main set of agent
 class or the `base`. All other agents subclasses
 of these
@@ -17,14 +18,13 @@ class LearningAgent(metaclass=ABCMeta):
     formulation.
     """
 
+    name_scope = "agent"
+
     def __init__(self,
-                 policy,
                  environment,
                  graph,
-                 agent_scope,
-                 discount_factor):
+                 upper_scope):
 
-        self._policy = policy
         self._environment = environment
         self._done = True
         self._state = None
@@ -32,17 +32,12 @@ class LearningAgent(metaclass=ABCMeta):
         self._traj_steps = 0 # current steps for trajectory
         self._num_traj = 0 # total number of trajectories completed
         self._traj_reward = -1 # current trajectory reward
-        self._dis_traj_reward = 0 # current discounted trajectory reward
-        self._discount_factor = discount_factor
+
         self._graph = graph
         self._session = None
-        self._agent_scope = agent_scope
+        self._agent_scope = ScopeWrap.build(upper_scope, self.name_scope)
 
-    @property
-    def discount_factor(self):
-        """ _discount_factor property
-        """
-        return self._discount_factor
+        self._policy = None
 
     @property
     def traj_reward(self):
@@ -55,12 +50,6 @@ class LearningAgent(metaclass=ABCMeta):
         """ _num_traj property
         """
         return self._num_traj
-
-    @property
-    def dis_traj_reward(self):
-        """ _dis_traj_reward property
-        """
-        return self._dis_traj_reward
 
     @property
     def traj_steps(self):
@@ -151,21 +140,17 @@ class LearningAgent(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    def act_in_env(self, training):
+    def act_in_env(self):
         """ Agent acts in the environment
-            Args:
-                training: whether the agent is training
 
             Returns:
                 dict containing one-step state infor
                 {'state':, 'action':, 'reward':, 'done':, 'next_state':}
                 values are in whatever format the environment and agent return
         """
-        was_done = False
+
         if self._done:
-            was_done = True
             self._state = self._environment.reset()
-            self._dis_traj_reward = 0.
             self._traj_reward = 0.
             self._traj_steps = 0
             self._num_traj += 1
@@ -176,7 +161,6 @@ class LearningAgent(metaclass=ABCMeta):
         self._total_steps += 1
         self._traj_steps += 1
 
-        self._dis_traj_reward += (self._discount_factor) * reward if not was_done else reward
         self._traj_reward += reward
 
         return {"state": prev_state,
@@ -185,38 +169,38 @@ class LearningAgent(metaclass=ABCMeta):
                 "done": self._done,
                 "next_state": self._state}
 
-    def act_for_steps(self, num_steps, training):
+    def act_for_steps(self, num_steps):
         """ Generator: Agent acts in environment for num_steps
                 Args:
                     num_steps: maximum number of steps to act for
-                    training: whether the agent is training
+
 
                 Yields:
                      return value of act_in_env
 
         """
         for _ in range(1, num_steps + 1):
-            yield self.act_in_env(training)
+            yield self.act_in_env()
 
-    def act_for_trajs(self, num_traj, training):
+    def act_for_trajs(self, num_traj):
         """ Generator Agent acts in environment until
         completing a specified number of trajectories
             Args:
                 num_steps: maximum number of trajectories to act
                 for
-                training: whether training
+
             Yields:
                 return value of act_in_env
         """
         for _ in range(1, num_traj + 1):
-            yield from self.run_trajectory(training)
+            yield from self.run_trajectory()
 
     @loggers.avg(loggers.LogVarType.INSTANCE_ATTR,
                  "traj_reward",
                  "Agent average trajectory reward is %.2f",
                  (loggers.LogVarType.RETURNED_DICT, "done", lambda done: done),
                  tensorboard=False)
-    def run_trajectory(self, training=False):
+    def run_trajectory(self):
         """ Generator: Runs a trajectory. This means the agent
         acts until a termination signal from the environment
         is received. Not for training.
@@ -225,11 +209,11 @@ class LearningAgent(metaclass=ABCMeta):
         """
         terminate = False
         while not terminate:
-            env_info = self.act_in_env(training)
+            env_info = self.act_in_env()
             terminate = bool(env_info["done"])
             yield env_info
 
-    def run_trajectory_through(self, training=False):
+    def run_trajectory_through(self):
         """ Runs the traject until complete returning no info
         during run.
 
@@ -237,18 +221,19 @@ class LearningAgent(metaclass=ABCMeta):
                 number of steps agent went through
         """
         steps = 0
-        while not self.act_in_env(training)["done"]:
+        while not self.act_in_env()["done"]:
             steps += 1
         return steps
 
 
-
+@gin.configurable
 class ValueGradientAgent(LearningAgent):
     """ This agent minimizes the `Bellman` error.
     This is similar to the variants of TD-Learning/Monte-Carlo
     """
     pass
 
+@gin.configurable
 class DecoupledValueGradientAgent(ValueGradientAgent):
     """ This agent minimizes a decoupled TD-Learning
     error. In which there is a `bootstrapping` and
@@ -258,6 +243,7 @@ class DecoupledValueGradientAgent(ValueGradientAgent):
     """
     pass
 
+@gin.configurable
 class PolicyGradientAgent(LearningAgent):
     """ This agent maxmizes the `policy` gradient.
     This agent can stand on it's own if utilizes
@@ -265,6 +251,7 @@ class PolicyGradientAgent(LearningAgent):
     """
     pass
 
+@gin.configurable
 class MultiGradientAgent(LearningAgent):
     """ Represents a more general implementation
     of `Actor-Critic` style learning. In which,
