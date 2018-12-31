@@ -33,7 +33,7 @@ def _value_layer(tensor_inputs, num_actions):
     # remove extra dimensions added
     return tf.squeeze(conv, axis=[1, 2])
 
-class ApproximateRLFunction(metaclass=ABCMeta):
+class RLFunction(metaclass=ABCMeta):
     """ Represents any approximate RL
     function
     """
@@ -73,7 +73,7 @@ class ApproximateRLFunction(metaclass=ABCMeta):
         raise NotImplementedError()
 
 
-class ValueFunction(ApproximateRLFunction):
+class ValueFunction(RLFunction):
     """ Represents a Value or Action-Value
     function
     """
@@ -164,7 +164,7 @@ class ValueFunction(ApproximateRLFunction):
                    num_of_actions)
 
 
-class ContinousActionValueFunction(ApproximateRLFunction):
+class ContinousActionValueFunction(RLFunction):
     """ Represents an Action-Value Function (Q)
     that has a continuous action as it's input
     as well as a state. Examples are Continuous-Q
@@ -304,7 +304,7 @@ class ContinousActionValueFunction(ApproximateRLFunction):
                    has_action_source=True)
 
 
-class ContinuousRealPolicy(ApproximateRLFunction):
+class ContinuousRealPolicy(RLFunction):
     """ Policy that outputs a Real Number
     useful for parameterizing means
     """
@@ -380,7 +380,7 @@ class ContinuousRealPolicy(ApproximateRLFunction):
 
 
 
-class ProbabilisticPolicy(ApproximateRLFunction):
+class ProbabilisticPolicy(RLFunction):
     """ Represents a
     policy that selects actions
     given a state based on a probability
