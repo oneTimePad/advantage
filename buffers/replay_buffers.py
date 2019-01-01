@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractmethod
 import numpy as np
+import gin
 from advantage.buffers.elements import build_idx_to_attr_map
 
 """ This module contains `Replay Buffers`. These
@@ -41,6 +42,7 @@ class Buffer(metaclass=ABCMeta):
 
 
 # Reference: https://github.com/ageron/handson-ml/blob/master/16_reinforcement_learning.ipynb
+@gin.configurable
 class ReplayBuffer(Buffer):
     """ Stores Elements and Replays them
     (allows them to be fetched latter on)
@@ -74,6 +76,12 @@ class ReplayBuffer(Buffer):
         `_cur_buffer_size`
         """
         return self._cur_buffer_size
+
+    @property
+    def element_cls(self):
+        """ property for `_element_cls`
+        """
+        return self._element_cls
 
     @property
     def max_buffer_size(self):
@@ -116,11 +124,6 @@ class ReplayBuffer(Buffer):
                                             self._element_idx_to_attr_map,
                                             self._element_len)
 
-    def pop(self, batch_size):
-        popped = self._buffer[:batch_size]
-        self._buffer = self._buffer[batch_size:]
-
-
     def sample_batches(self,
                        batch_size,
                        num_batches):
@@ -142,6 +145,7 @@ class ReplayBuffer(Buffer):
         self._cur_buffer_size = 0
         self._index = 0
 
+@gin.configurable
 class RandomizedReplayBuffer(ReplayBuffer):
     """Allows for collecting various `Elements` made by an agent.
     This buffer is commonly used in many approximate RL algorithms to
