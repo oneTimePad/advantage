@@ -27,9 +27,7 @@ class LearningAgent(metaclass=ABCMeta):
 
     def __init__(self,
                  scope,
-                 environment,
-                 graph,
-                 local_stats):
+                 environment):
 
         self._scope = scope
         self._environment = environment
@@ -40,14 +38,13 @@ class LearningAgent(metaclass=ABCMeta):
         self._num_traj = 0 # total number of trajectories completed
         self._traj_reward = -1 # current trajectory reward
 
-        self._graph = graph
         self._session = None
 
-        self._policy = None
-
-        self._local_stats = local_stats
+        self.local_stats = None
 
         self._objectives = None
+
+        self.policy = None
 
     @property
     def traj_reward(self):
@@ -72,12 +69,6 @@ class LearningAgent(metaclass=ABCMeta):
         """ _total_steps property
         """
         return self._total_steps
-
-    @property
-    def policy(self):
-        """ _policy property
-        """
-        return self._policy
 
     @property
     def environment(self):
@@ -107,22 +98,10 @@ class LearningAgent(metaclass=ABCMeta):
         self._session = sess
 
     @property
-    def graph(self):
-        """ property for `_graph`
-        """
-        return self._graph
-
-    @property
     def scope(self):
         """ property for `_scope`
         """
         return self._scope
-
-    @property
-    def local_stats(self):
-        """ property for `_local_stats`
-        """
-        return self._local_stats
 
     @abstractmethod
     @classmethod
@@ -266,6 +245,9 @@ def gin_construct(func):
         for obj in objective_init.values():
             obj.set_up(self.session)
 
+            if hasattr(obj, "main"):
+                self.policy = obj.func
+
     wrapped.__name__ = func.__name__
     wrapped = gin.configurable(wrapped)
     return wrapped
@@ -288,7 +270,7 @@ class ValueGradientAgent(LearningAgent):
 
     @classmethod
     def gin_wire(cls):
-        gin_bind_objectives(cls, {"value" : Objectives.VALUE_GRADIENT})
+        gin_bind_objectives(cls, {"value" : Objectives.VALUE_GRADIENT, "main": True})
         gin_bind_init(Objectives.VALUE_GRADIENT, "value_func", Policies.VALUE)
 
 

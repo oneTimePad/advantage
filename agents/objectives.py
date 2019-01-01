@@ -28,18 +28,19 @@ class Objective(metaclass=ABCMeta):
     def __init__(self,
                  scope,
                  replay_buffer,
-                 element_cls,
                  func,
                  iteration_of_optimization):
 
         self._scope = scope
 
         self._replay_buffer = replay_buffer
-        self._element_cls = element_cls
+        self._element_cls = replay_buffer.element_cls
 
         self._func = func
 
         self._iterations_of_optimization = iteration_of_optimization
+
+        self._objective = None
 
     @property
     def scope(self):
@@ -85,10 +86,12 @@ class ValueGradientObjective(Objective):
     reward given a state, value pairs.
     This is also known as the `Value Gradient`
     """
+
+    name_scope = "value_gradient_objective"
+
     def __init__(self,
                  scope,
                  replay_buffer,
-                 element_cls,
                  discount_factor,
                  value_func,
                  iteration_of_optimization,
@@ -108,21 +111,16 @@ class ValueGradientObjective(Objective):
                 steps: number of step for bellman operator (or return)
 
         """
-        self._replay_buffer = replay_buffer
-        self._element_cls = element_cls
 
         self._discount_factor = discount_factor
-        self._iterations_of_optimization = iteration_of_optimization
         self._steps = steps
 
-        self._objective = None
-
-        self._waiting_buffer = ReplayBuffer(element_cls, steps)
+        self._waiting_buffer = ReplayBuffer(replay_buffer.element_cls,
+                                            steps)
 
         super().__init__(self,
                          scope,
                          replay_buffer,
-                         element_cls,
                          value_func,
                          iteration_of_optimization)
 
@@ -223,7 +221,7 @@ class ValueGradientObjective(Objective):
                               {"state": batch.state},
                               {"bellman_target_plh": batch.n_step_return})
 
-@gin.configurable(blacklist=["scope", "replay_buffer"])
+@gin.configurable(blacklist=["scope"])
 class DecoupledValueGradientObjective(ValueGradientObjective):
     """ Represents a Bellman objective
     in which the bootstrapping func is not the same
@@ -231,10 +229,16 @@ class DecoupledValueGradientObjective(ValueGradientObjective):
     optimization.
     """
 
+    name_scope = "decoupled_value_gradient_objective"
+
     def __init__(self,
-                 bootstrap_func,
-                 *args,
-                 **kwargs):
+                 scope,
+                 replay_buffer,
+                 discount_factor,
+                 value_func,
+                 iteration_of_optimization,
+                 steps,
+                 bootstrap_func):
         """
             Args:
                 bootstrap_func: function for bootstrapping
@@ -243,9 +247,12 @@ class DecoupledValueGradientObjective(ValueGradientObjective):
 
         self._copy = None
 
-        super().__init__(*args,
-                         name_scope="decoupled_n_step_bellman_objective",
-                         **kwargs)
+        super().__init__(scope,
+                         replay_buffer,
+                         discount_factor,
+                         value_func,
+                         iteration_of_optimization,
+                         steps)
 
     @property
     def boostrap_func(self):
@@ -275,7 +282,7 @@ class DecoupledValueGradientObjective(ValueGradientObjective):
         """
         self._copy()
 
-@gin.configurable(blacklist=["scope", "replay_buffer"])
+@gin.configurable(blacklist=["scope"])
 class PolicyGradientObjective(Objective):
     """ Contains information related
     to specifying an objective for an
@@ -287,7 +294,6 @@ class PolicyGradientObjective(Objective):
     def __init__(self,
                  scope,
                  replay_buffer,
-                 element_cls,
                  policy_func,
                  policy_return,
                  iteration_of_optimization,
@@ -296,9 +302,7 @@ class PolicyGradientObjective(Objective):
         self._policy_return = policy_return
 
         self._replay_buffer = replay_buffer
-        self._element_cls = element_cls
 
-        self._iterations_of_optimization = iteration_of_optimization
         self._from_gradient = from_gradient
 
         self._action_taken_plh = None
