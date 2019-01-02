@@ -9,13 +9,14 @@ Will be added to PyPI shortly
 
 Currently supports:
  - Deep-Q Network
+ 
+In the Works:
+ - Moving from protobufs to [gin-config](https://github.com/google/gin-config)
+ - PPO, A3C, EPG, N-step Q, and distributed training
 
 Planned additions:
   - Value-based:
     - C51, Implicit Quantile Agents
-  - Policy-Gradients:
-     - Evolved Policy Gradients
-     - Proximal Policy Optimization
   - Multi-agent
   
 ### Dependencies 
