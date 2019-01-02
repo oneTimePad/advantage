@@ -12,7 +12,7 @@ Currently supports:
  
 In the Works:
  - Moving from protobufs to [gin-config](https://github.com/google/gin-config)
- - PPO, A3C, EPG, N-step Q, and distributed training
+ - PPO, A3C, EPG, N-step Q, Soft-AC, and distributed training
 
 Planned additions:
   - Value-based:
