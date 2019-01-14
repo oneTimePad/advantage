@@ -74,11 +74,18 @@ class ScopeWrap:
     into one that can be used to add
     new variables to the graph and scope
     """
-    def __init__(self, graph, name, reuse):
+    def __init__(self,
+                 graph,
+                 name,
+                 reuse,
+                 improve_step,
+                 is_training=False):
         self._scope = None
         self._name = name
         self._graph = graph
         self._reuse = reuse
+        self._improve_step = improve_step
+        self._is_training = is_training
 
     def __call__(self, graph_only=False):
         """ Combines graph and var_scope into one
@@ -115,6 +122,18 @@ class ScopeWrap:
         """
         return self._reuse
 
+    @property
+    def is_training(self):
+        """ property for `_is_training`
+        """
+        return self._is_training
+
+    @property
+    def improve_step(self):
+        """ property for `_improve_step`
+        """
+        return self._improve_step
+
     @classmethod
     def build(cls, upper_scope, new_scope):
         """ Creates ScopeWrap by combing
@@ -125,4 +144,6 @@ class ScopeWrap:
                                   new_scope)
         return cls(upper_scope.graph,
                    name_scope,
-                   upper_scope.reuse)
+                   upper_scope.reuse,
+                   upper_scope.improve_step,
+                   is_training=upper_scope.is_training)
