@@ -44,7 +44,7 @@ class LearningAgent(metaclass=ABCMeta):
 
         self._objectives = None
 
-        self.policy = None
+        self.policy = lambda session, states: None
 
     @property
     def traj_reward(self):
@@ -124,25 +124,30 @@ class LearningAgent(metaclass=ABCMeta):
 
     @abstractmethod
     def pre_iteration(self):
+        """ Hook ran prior to
+        an acting iteration
+        """
         raise NotImplementedError()
 
     @abstractmethod
     def post_iteration(self):
+        """ Hook ran after an
+        acting iteration
+        """
         raise NotImplementedError()
 
-    @abstractmethod
-    def sample_action(self, state):
+    def sample_action(self, states):
         """ The agent acts in the
         environment given the `state`-space
         representation
             Args:
-                state: state-space representation
+                states: state-space representation
                     from selected `Environment`
 
             Returns:
                 selected action-space element
         """
-        raise NotImplementedError()
+        return self.policy(self.session, states)
 
     def act_in_env(self):
         """ Agent acts in the environment
@@ -248,9 +253,10 @@ def gin_construct(func):
             if hasattr(obj, "main"):
                 self.policy = obj.func
 
+    # functools.wraps doesn't work
     wrapped.__name__ = func.__name__
-    wrapped = gin.configurable(wrapped)
-    return wrapped
+
+    return gin.configurable(wrapped)
 
 def gin_bind_objectives(cls, objectives):
     """ shortcut for gin_bind for objectives
@@ -277,8 +283,6 @@ class ValueGradientAgent(LearningAgent):
     @gin_construct
     def construct(self, objectives):
         pass
-
-
 
 @gin.configurable
 class DecoupledValueGradientAgent(ValueGradientAgent):
