@@ -3,10 +3,58 @@ from enum import Enum
 import tensorflow as tf
 import numpy as np
 import gin
+import random
+import attr
 from advantage.utils.tf_utils import ScopeWrap
+from advantage.utils.gin_utils import gin_classmethod
+import advantage.loggers as loggers
 
 """ Contains common policies/functions for RL agents.
 """
+
+@attr.s
+class Epsilon:
+    """ Holds attrs for defining
+    decaying epsilon
+    """
+    init = attr.ib(kw_only=True)
+    min = attr.ib(kw_only=True)
+    decay_steps = attr.ib(kw_only=True)
+    decay_rate = attr.ib(kw_only=True)
+
+def decayed_epsilon(scope,
+                    epsilon):
+    """ Constructs a callable that returns
+    the decayed epsilon
+
+        Args:
+            agent: agent who has session
+            scope: scope to make vars/ops in
+            epsilon: epsilon config
+
+        Returns:
+            callable that returns epsilon value
+    """
+    with scope():
+        eps = tf.train.exponential_decay(epsilon.init,
+                                         scope.improve_step,
+                                         epsilon.decay_steps,
+                                         epsilon.decay_rate,
+                                         staircase=True,
+                                         name="decayed_epsilon")
+    min_epsilon = epsilon.min
+
+    @loggers.value(loggers.LogVarType.RETURNED_VALUE,
+                   "epsilon",
+                   "Agent current epsilon is %.2f",
+                   tensorboard=False)
+    def fetch_eps(session):
+
+        eps_runtime = session.run(eps)
+
+        return eps_runtime if eps_runtime > min_epsilon else min_epsilon
+
+    return fetch_eps
 
 def _value_layer(tensor_inputs, num_actions):
     """Useful for constructing output of state-value function or action-value function
@@ -41,15 +89,19 @@ class RLFunction(metaclass=ABCMeta):
 
     def __init__(self,
                  scope,
-                 approximator):
+                 approximator,
+                 approximator_fn,
+                 state_shape):
 
         self._scope = scope
         self._approximator = approximator
-        self._eval_func = None
-        self._func = approximator.network
+        self._approximator_fn = approximator_fn
+        self._eval_func = None # represent func used for evaluation or inference
+        self._func = approximator.network # represents tf network output
+        self._state_shape = state_shape
 
-    def __getattr__(self, attr):
-        return getattr(self._approximator, attr)
+    def __getattr__(self, attribute):
+        return getattr(self._approximator, attribute)
 
     @property
     def scope(self):
@@ -58,8 +110,14 @@ class RLFunction(metaclass=ABCMeta):
         return self._scope
 
     @property
+    def approximator_fn(self):
+        """ property for `_approximator_fn`
+        """
+        return self._approximator_fn
+
+    @property
     def approximator(self):
-        """ property for `_func`
+        """ property for `_approximator`
         """
         return self._approximator
 
@@ -69,8 +127,14 @@ class RLFunction(metaclass=ABCMeta):
         """
         return self._func
 
+    @property
+    def state_shape(self):
+        """ property for `_state_shape`
+        """
+        return self._state_shape
+
     @abstractmethod
-    def set_up(self, session, **kwargs):
+    def set_up(self, session):
         """ Builds all necessary TF-Graph
         components
 
@@ -79,6 +143,20 @@ class RLFunction(metaclass=ABCMeta):
                 kwargs: args for policy
         """
         raise NotImplementedError()
+
+    @abstractmethod
+    @classmethod
+    def copy_obj(cls, scope):
+        """ Perform a copy from `copy_from`
+                Args:
+                    scope: the scope for the new copy
+
+                Returns:
+                    copy of RLFunction
+                    of the same type
+        """
+        raise NotImplementedError()
+
 
 @gin.configurable(blacklist=["scope"])
 class ValueFunction(RLFunction):
@@ -92,8 +170,8 @@ class ValueFunction(RLFunction):
                  scope,
                  approximator,
                  state_shape,
-                 num_of_actions=None):
-
+                 num_of_actions=None,
+                 use_epsilon=False):
 
         with scope():
             state_plh = tf.placeholder(shape=state_shape,
@@ -103,17 +181,41 @@ class ValueFunction(RLFunction):
             approx_inst = approximator(approx_scope, state_plh, [state_plh])
 
         self._num_of_actions = num_of_actions
-        super().__init__(self, scope, approx_inst)
+
+        self._fetch_eps = None
+
+        if scope.is_training and use_epsilon:
+            self._fetch_eps = decayed_epsilon(scope, Epsilon())
+
+        super().__init__(self,
+                         scope,
+                         approximator,
+                         approx_inst)
 
     def __call__(self,
                  session,
                  states):
+        sampled_action = self._eval_func(session, states)
 
-        return self._eval_func(session, states)
+        if self._fetch_eps:
+            prob = random.random()
+            eps = self._fetch_eps(session)
+
+            if prob > eps:
+                sampled_action = sampled_action
+            else:
+                sampled_action = random.randint(0, self._num_of_actions)
+
+        return sampled_action
+
+    @property
+    def num_of_actions(self):
+        """ property for `_num_of_actions`
+        """
+        return self._num_of_actions
 
     def set_up(self,
-               session,
-               **kwargs):
+               session):
         """ SetUp method for ValueFunction
         builds all necessary TF Graph Elements
 
@@ -145,6 +247,14 @@ class ValueFunction(RLFunction):
 
         self._approximator.initialize(session)
 
+    def copy_obj(self, scope):
+        approx_scope = ScopeWrap.build(scope, self.approximator_fn.name_scope)
+
+        return ValueFunction(approx_scope,
+                             self.approximator_fn,
+                             self.state_shape,
+                             self.num_of_actions)
+
 class ContinousActionValueFunction(RLFunction):
     """ Represents an Action-Value Function (Q)
     that has a continuous action as it's input
@@ -157,10 +267,18 @@ class ContinousActionValueFunction(RLFunction):
     def __init__(self,
                  scope,
                  approximator,
+                 approximator_fn,
                  has_action_source=False):
 
         self._has_action_source = has_action_source
-        super().__init__(self, scope, approximator)
+
+        self.action_func = None
+        self.action_shape = None
+
+        super().__init__(self,
+                         scope,
+                         approximator,
+                         approximator_fn)
 
     def __call__(self,
                  session,
@@ -179,9 +297,14 @@ class ContinousActionValueFunction(RLFunction):
 
         return self._eval_func(session, states)
 
+    @property
+    def has_action_source(self):
+        """ property for `_has_action_source`
+        """
+        return self._has_action_source
+
     def set_up(self,
-               session,
-               **kwargs):
+               session):
         """ SetUp method for ContinuousValueFunction
         builds all necessary TF Graph Elements
 
@@ -203,8 +326,7 @@ class ContinousActionValueFunction(RLFunction):
 
         self._approximator.initialize(session)
 
-    @gin.configurable(blacklist=["scope", "state_shape", "action_shape"])
-    @classmethod
+    @gin_classmethod(blacklist=["scope", "state_shape", "action_shape"])
     def build(cls,
               scope,
               approximator,
@@ -238,11 +360,15 @@ class ContinousActionValueFunction(RLFunction):
                                    concat,
                                    [state_plh, action_plh])
 
-        return cls(scope,
-                   approx_inst)
+        inst = cls(scope,
+                   approx_inst,
+                   approximator)
 
-    @gin.configurable(blacklist=["scope", "state_shape"])
-    @classmethod
+        inst.action_shape = action_shape
+
+        return inst
+
+    @gin_classmethod(blacklist=["scope", "state_shape"])
     def build_from_action_source(cls,
                                  scope,
                                  approximator,
@@ -277,9 +403,26 @@ class ContinousActionValueFunction(RLFunction):
                                    concat,
                                    [state_plh])
 
-        return cls(scope,
+        inst = cls(scope,
                    approx_inst,
+                   approximator,
                    has_action_source=True)
+
+        inst.action_func = action_func
+
+        return inst
+
+    def copy_obj(self, scope):
+
+        if self.has_action_source:
+            return self.build_from_action_source(scope,
+                                                 gin.REQUIRED,
+                                                 self.state_shape,
+                                                 gin.REQUIRED)
+        return self.build(scope,
+                          gin.REQUIRED,
+                          self.state_shape,
+                          self.action_shape)
 
 
 @gin.configurable(blacklist=["scope", "state_shape", "action_shape"])
@@ -307,7 +450,10 @@ class ContinuousRealPolicy(RLFunction):
                                    state_plh,
                                    [state_plh])
 
-        super().__init__(self, scope, approx_inst)
+        super().__init__(self,
+                         scope,
+                         approx_inst,
+                         approximator)
 
 
     def __call__(self,
@@ -316,22 +462,32 @@ class ContinuousRealPolicy(RLFunction):
 
         return self._eval_func(session, states)
 
-    def set_up(self, session, **kwargs):
+    def set_up(self, session):
         """ Builds all necessary TF-Graph
         components
 
             Args:
                 session: tf.Session
-                kwargs: args for policy
         """
         with self._scope():
 
             self._func = _value_layer(self._approximator.network, self._action_shape)
 
+            if self.scope.is_training:
+                self._func += tf.random_normal(self._action_shape)
+
         self._eval_func = lambda session, states: self._approximator.inference(session,
                                                                                {"state": states})
 
         self._approximator.initialize(session)
+
+    def copy_obj(self, scope):
+        approx_scope = ScopeWrap.build(scope, self.approximator_fn.name_scope)
+
+        return ContinuousRealPolicy(approx_scope,
+                                    self.approximator_fn,
+                                    self.state_shape,
+                                    self.num_of_actions)
 
 class ProbabilisticPolicy(RLFunction):
     """ Represents a
@@ -344,26 +500,71 @@ class ProbabilisticPolicy(RLFunction):
     def __init__(self,
                  scope,
                  approximator,
-                 state_shape):
+                 state_shape,
+                 action_shape=None):
         with scope():
             state_plh = tf.placeholder(shape=state_shape,
                                        dtype=tf.float32,
                                        name="state")
+            if action_shape: # used by liklehood
+                self._action_taken_plh = tf.placeholder(shape=action_shape,
+                                                        dtype=tf.int32,
+                                                        name="action_taken")
         approx_scope = ScopeWrap.build(scope, approximator.name_scope)
         approx_inst = approximator(approx_scope,
                                    state_plh,
                                    [state_plh])
-
         super().__init__(self, scope, approx_inst)
+
+        self._old = None
+        self._copy = None
+        self._action_shape = action_shape
+        self._liklehood = None
 
     def __call__(self,
                  session,
                  states):
 
-        return self._eval_func(session, states)
+        return self._sample(session, states)
+
+    @property
+    def old(self):
+        """ property for `_old`
+        """
+        return self._old
+
+    @property
+    def liklehood(self):
+        """ property for `_liklehood`
+        """
+        return self._liklehood
+
+    @property
+    def action_shape(self):
+        """ property for `_action_shape`
+        """
+        return self._action_shape
+
+    @property
+    def action_taken_plh(self):
+        """ property for `_action_taken_plh`
+        """
+        return self._action_taken_plh
 
     @abstractmethod
-    def _policy(self, network, **kwargs):
+    def _sample(self, session, states):
+        """ Builds sampling function
+                Args:
+                    session: tf.Session
+                    states: states to evaluate
+
+                Returns:
+                    function for sampling
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _policy(self, network):
         """ Appends Policy to
         network
 
@@ -375,19 +576,78 @@ class ProbabilisticPolicy(RLFunction):
         """
         raise NotImplementedError()
 
-    def set_up(self, session, **kwargs):
+    @abstractmethod
+    def _make_liklehood(self):
+        """ Makes the liklehood
+        tensor.
+        """
+        raise NotImplementedError()
+
+    def _make_action_taken_plh(self, action_shape):
+        """ Make the `action_taken_plh`
+        if doesn't exist.
+            Args:
+                action_shape: shape of placeholder
+        """
+        if not self._action_taken_plh:
+            with self._scope():
+                self._action_taken_plh = tf.placeholder(shape=action_shape,
+                                                        dtype=tf.int32,
+                                                        name="action_taken")
+
+    def eval_liklehood(self, session, states, actions=None):
+        """ Computes liklehood
+                Args:
+                    session: tf.Session
+                    states: states to eval on
+                    actions: actions taken at states
+                Returns:
+                    liklehoods
+        """
+        if self._action_taken_plh:
+            if not actions:
+                raise ValueError("Expects actions to not be None")
+            feed_dict = {"state": states, self._action_taken_plh: actions}
+        else:
+            feed_dict = {"state": states}
+
+        return session.run(self.liklehood, feed_dict=feed_dict)
+
+    def set_up(self, session):
         """ Builds all necessary TF-Graph
         components
 
             Args:
                 session: tf.Session
-                kwargs: args for policy
         """
-        self._func = self._policy(self._approximator.network, **kwargs)
+        self._func = self._policy(self._approximator.network)
         self._eval_func = lambda session, states: self._approximator.inference(session,
                                                                                {"state": states})
-
+        self._make_liklehood()
         self._approximator.initialize(session)
+
+    def make_old(self, session):
+        """ Constructs a copy of the policy
+        termed "old". It is common for ProbabilisticPolicy's
+        to have an old copy they sync with. Only allowed
+        if training
+            Args:
+                session: tf.Session
+        """
+
+        if self.scope.is_training:
+            old_scope = ScopeWrap.build(self.scope,
+                                        "old/{0}".format(self.name_scope))
+
+            self._old = self.copy_obj(old_scope)
+
+            self._copy = self._old.make_copy_op(session,
+                                                self._func)
+
+    def sync_old(self):
+        """ Sync and save params to `old`
+        """
+        self._copy()
 
 @gin.configurable(blacklist=["scope", "state_shape"])
 class MultinomialPolicy(ProbabilisticPolicy):
@@ -396,51 +656,46 @@ class MultinomialPolicy(ProbabilisticPolicy):
 
     name_scope = "multinomial_policy"
 
-    @staticmethod
-    def _sample_multinomial(distribution):
-        """ Sample from Normal given
-        mean and sigma
-            Args:
-                distribution: np ndarray of probabilities
+    def __init__(self,
+                 scope,
+                 approximator,
+                 state_shape,
+                 num_of_actions):
+        self._num_of_actions = num_of_actions
 
-            Returns:
-                action
+        super().__init__(self, scope, approximator, state_shape, [None, 1])
+
+    @property
+    def num_of_actions(self):
+        """ property of _num_of_actions
         """
+        return self._num_of_actions
 
+    def _sample(self, session, states):
+        distribution = self._eval_func(session, states)
         return np.amax(distribution, axis=1)
 
-    def _policy(self, network, **kwargs):
+    def _policy(self, network):
         """Useful for constructing output layers for a multinomial policy settings
                 Args:
                     network: output of network to pass in
-                    kwargs["num_of_actions"] : number of actions
                 Returns:
                     output of multinomial policy
         """
-        if not kwargs or "num_of_actions" not in kwargs:
-            raise ValueError("MultinomialPolicy expects `num_of_actions` kwargs")
 
-        return tf.nn.softmax(network, axis=kwargs["num_of_actions"])
+        return tf.nn.softmax(network, axis=self._num_of_actions)
 
-    def set_up(self,
-               session,
-               **kwargs):
-        """
-            Args:
-                session: tf.Session
-                kwargs["num_of_actions"]: number of policy actions
-        """
-        if "num_of_actions" not in kwargs:
-            raise ValueError("MultinomialPolicy expects `num_of_actions` kwargs")
+    def _make_liklehood(self):
+        self._liklehood = -tf.log(self._func)[:, self._action_taken_plh]
 
-        super().set_up(session, num_of_actions=kwargs["num_of_actions"])
+    def copy_obj(self, scope):
+        approx_scope = ScopeWrap.build(scope, self.approximator_fn.name_scope)
 
-        def sample(session, states):
-            distribution = self._eval_func(session, states)
+        return MultinomialPolicy(approx_scope,
+                                 self.approximator_fn,
+                                 self.state_shape,
+                                 self.num_of_actions)
 
-            return self._sample_multinomial(distribution)
-
-        self._eval_func = sample
 
 @gin.configurable(blacklist=["scope", "state_shape"])
 class BernoulliPolicy(ProbabilisticPolicy):
@@ -451,20 +706,18 @@ class BernoulliPolicy(ProbabilisticPolicy):
 
     name_scope = "bernoulli_policy"
 
-    @staticmethod
-    def _sample_binomial(distribution):
-        """ Sample from Normal given
-        mean and sigma
-            Args:
-                distribution: np ndarray of probabilities
+    def __init__(self,
+                 scope,
+                 approximator,
+                 state_shape):
 
-            Returns:
-                action
-        """
+        super().__init__(self, scope, approximator, state_shape)
 
+    def _sample(self, session, states):
+        distribution = self._eval_func(session, states)
         return np.amax(distribution, axis=1)
 
-    def _policy(self, network, **kwargs):
+    def _policy(self, network):
         """Useful for constructing output layers for a multinomial policy settings
                 Args:
                     network: output of network to pass in
@@ -474,24 +727,18 @@ class BernoulliPolicy(ProbabilisticPolicy):
 
         return tf.nn.sigmoid(network)
 
-    def set_up(self,
-               session,
-               **kwargs):
-        """
-            Args:
-                session: tf.Session
-        """
+    def _make_liklehood(self):
+        self._liklehood = -tf.log(self._func)
 
-        super().set_up(session)
 
-        def sample(session, states):
-            distribution = self._eval_func(session, states)
+    def copy_obj(self, scope):
+        approx_scope = ScopeWrap.build(scope, self.approximator_fn.name_scope)
 
-            return self._sample_binomial(distribution)
+        return BernoulliPolicy(approx_scope,
+                               self.approximator_fn,
+                               self.state_shape)
 
-        self._eval_func = sample
-
-@gin.configurable(blacklist=["scope", "state_shape"])
+@gin.configurable(blacklist=["scope", "state_shape", "action_shape"])
 class GaussianPolicy(ProbabilisticPolicy):
     """ Continuous Gaussian Policy
     """
@@ -500,11 +747,13 @@ class GaussianPolicy(ProbabilisticPolicy):
 
     def __init__(self,
                  scope,
-                 approximator):
+                 approximator,
+                 state_shape,
+                 action_shape):
         self._mean = None
         self._sigma = None
 
-        super().__init__(self, scope, approximator)
+        super().__init__(self, scope, approximator, state_shape, action_shape)
 
     @property
     def mean(self):
@@ -518,37 +767,24 @@ class GaussianPolicy(ProbabilisticPolicy):
         """
         return self._sigma
 
-    @staticmethod
-    def _sample_gaussian(mean, sigma):
-        """ Sample from Normal given
-        mean and sigma
-            Args:
-                mean: mean as np.ndarray
-                sigma: stddev as np.ndarray
+    def _sample(self, session, states):
 
-            Returns:
-                action
-        """
-
+        mean, sigma = self._eval_func(session, states)
         covariance = np.diag(np.exp(sigma))
 
         return np.random.multivariate_normal(mean=mean, cov=covariance)
 
-
-    def _policy(self, network, **kwargs):
+    def _policy(self, network):
         """Useful for constructing output layers for a multinomial policy settings
                 Args:
                     network: output of network to pass in
-                    kwargs["action_shape"]: shape of action space
                 Returns:
                     mean and sigma gaussian policy
         """
-        if not kwargs or "action_shape" not in kwargs:
-            raise ValueError("MultinomialPolicy expects `action_shape` kwargs")
 
-        mean = tf.layers.dense(network, kwargs["action_shape"], activation=None)
-        sigma = tf.layers.dense(tf.ones([1, kwargs["action_shape"]]),
-                                kwargs["num_of_actions"],
+        mean = tf.layers.dense(network, self._action_shape, activation=None)
+        sigma = tf.layers.dense(tf.ones([1, self._action_shape]),
+                                self._action_shape,
                                 activation=None,
                                 use_bias=False)
         self._mean = mean
@@ -556,25 +792,21 @@ class GaussianPolicy(ProbabilisticPolicy):
 
         return mean, sigma
 
-    def set_up(self,
-               session,
-               **kwargs):
-        """
-            Args:
-                session: tf.Session
-                kwargs["action_shape"]: shape of action space
-        """
-        if "action_shape" not in kwargs:
-            raise ValueError("MultinomialPolicy expects `action_shape` kwargs")
+    def _make_liklehood(self):
+        action_dim = self.action_shape[1]
+        first_add = -(action_dim/ 2) * tf.log(2 * np.pi)
+        sec_add = -tf.reduce_sum(self.sigma, axis=1)
+        third_add = -0.5 * tf.reduce_sum(((self._action_taken_plh - self.mean) / tf.exp(self.sigma)) ** 2, axis=1)
 
-        super().set_up(session, num_of_actions=kwargs["action_shape"])
+        return first_add + sec_add + third_add
 
-        def sample(session, states):
-            mean_value, sigma_value = self._eval_func(session, states)
+    def copy_obj(self, scope):
+        approx_scope = ScopeWrap.build(scope, self.approximator_fn.name_scope)
 
-            return self._sample_gaussian(mean_value, sigma_value)
-
-        self._eval_func = sample
+        return GaussianPolicy(approx_scope,
+                              self.approximator_fn,
+                              self.state_shape,
+                              self.action_shape)
 
 class Policies(Enum):
     """Possible Policies to select
