@@ -42,6 +42,10 @@ class Objective(metaclass=ABCMeta):
 
         self._objective = None
 
+        self._improvement_steps = 0
+
+        self.regularizers = None
+
     @property
     def scope(self):
         """ property for `_scope`
@@ -54,16 +58,32 @@ class Objective(metaclass=ABCMeta):
         """
         return self._func
 
+    @property
+    def replay_buffer(self):
+        """ property for `_replay_buffer`
+        """
+        return self._replay_buffer
+
+    @property
+    def element_cls(self):
+        """ property for `_element_cls`
+        """
+        return self._element_cls
+
+    @property
+    def improvement_steps(self):
+        """ property for `_improvement_steps`
+        """
+        return self._improvement_steps
+
     @abstractmethod
     def set_up(self,
-               session,
-               regularizer=None):
+               session):
         """ Builds all necessary TF-Graph
         components
 
             Args:
                 session: tf.Session
-                regularizer: regularizer to use
         """
         raise NotImplementedError()
 
@@ -74,6 +94,19 @@ class Objective(metaclass=ABCMeta):
 
             Args:
                 env_dict: sampled from `Environment`
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def optimize(self,
+                 session,
+                 batch_size):
+        """ Performs optimization step
+        for `value_func`
+
+            Args:
+                session: tf.Session
+                batch_size: training batch size
         """
         raise NotImplementedError()
 
@@ -95,7 +128,8 @@ class ValueGradientObjective(Objective):
                  discount_factor,
                  value_func,
                  iteration_of_optimization,
-                 steps):
+                 steps,
+                 bootstrap_func):
         """
             Args:
                 replay_buffer: This objective uses
@@ -114,6 +148,7 @@ class ValueGradientObjective(Objective):
 
         self._discount_factor = discount_factor
         self._steps = steps
+        self._bootstrap_func = bootstrap_func
 
         self._waiting_buffer = ReplayBuffer(replay_buffer.element_cls,
                                             steps)
@@ -126,9 +161,9 @@ class ValueGradientObjective(Objective):
 
     @property
     def bootstrap_func(self):
-        """ property for bootstrapping func
+        """ property for `_bootstrap_func`
         """
-        return self._func
+        return self._bootstrap_func
 
     def _add_reward(self, reward):
         """ Integrates `reward` into the
@@ -147,17 +182,8 @@ class ValueGradientObjective(Objective):
         discounted = factors * reward
         elements.n_step_return += discounted
 
-    @gin.configurable("ValueGradientObjective")
-    def set_up(self,
-               session,
-               regularizer=None):
-        """ Builds all necessary TF-Graph
-        components
+    def set_up(self, session):
 
-            Args:
-                session: tf.Session
-                regularizer: regularizer to use
-        """
         self._func.set_up(session)
 
         with self._scope():
@@ -168,11 +194,12 @@ class ValueGradientObjective(Objective):
 
             self._func.add_target_placeholder(bellman_plh)
 
-            self._objective = tf.reduce_mean((1/2) * tf.square(bellman_plh - self._func.func),
-                                             name="objective")
+            self._objective = (1/2) * tf.square(bellman_plh - self._func.func)
+            if self.regularizers:
+                self._objective += sum(self.regularizers)
 
-            if regularizer:
-                self._objective += regularizer(self._func)
+            self._objective = tf.reduce_mean(self._objective,
+                                             name="objective")
 
             self._func.minimize(self._objective)
 
@@ -207,13 +234,6 @@ class ValueGradientObjective(Objective):
     def optimize(self,
                  session,
                  batch_size):
-        """ Performs optimization step
-        for `value_func`
-
-            Args:
-                session: tf.Session
-                batch_size: training batch size
-        """
         for batch in self._replay_buffer.sample_batches(batch_size,
                                                         self._iterations_of_optimization):
 
@@ -221,12 +241,14 @@ class ValueGradientObjective(Objective):
                               {"state": batch.state},
                               {"bellman_target_plh": batch.n_step_return})
 
+        self._improvement_steps += 1
+
 @gin.configurable(blacklist=["scope"])
 class DecoupledValueGradientObjective(ValueGradientObjective):
     """ Represents a Bellman objective
-    in which the bootstrapping func is not the same
-    value function whose parameters are being
-    optimization.
+    in which the bootstrapping function is of the same
+    architecture and type as the on-policy function.
+    Thus syncing is required.
     """
 
     name_scope = "decoupled_value_gradient_objective"
@@ -238,38 +260,33 @@ class DecoupledValueGradientObjective(ValueGradientObjective):
                  value_func,
                  iteration_of_optimization,
                  steps,
-                 bootstrap_func):
+                 sync_period):
         """
             Args:
                 bootstrap_func: function for bootstrapping
         """
-        self._bootstrap_func = bootstrap_func
-
         self._copy = None
+
+        self._sync_period = sync_period
+
+        self._optimization_calls = 0
+
+        bootstrap_scope = ScopeWrap.build(scope,
+                                         "target/{0}".format(value_func.name_scope))
+
+        bootstrap_func = value_func.copy_obj(bootstrap_scope)
 
         super().__init__(scope,
                          replay_buffer,
                          discount_factor,
                          value_func,
                          iteration_of_optimization,
-                         steps)
+                         steps,
+                         bootstrap_func)
 
-    @property
-    def boostrap_func(self):
-        """ property for custom boostrap_func
-        """
-        return self._bootstrap_func
+    def set_up(self, session):
 
-    def set_up(self, session, regularizer=None):
-        """ Builds all necessary TF-Graph
-                components
-
-                Args:
-                    session: tf.Session
-                    regularizer: regularizer to use
-        """
-
-        super().set_up(session, regularizer=regularizer)
+        super().set_up(session)
 
         self._bootstrap_func.set_up(session)
 
@@ -281,6 +298,17 @@ class DecoupledValueGradientObjective(ValueGradientObjective):
         and `value_func` parameters
         """
         self._copy()
+
+    def optimize(self,
+                 session,
+                 batch_size):
+
+        super().optimize(session, batch_size)
+
+        if self._optimization_calls % self._sync_period == 0:
+            self.sync()
+        else: # don't count improvement (decrement from super call)
+            self._improvement_steps -= 1
 
 @gin.configurable(blacklist=["scope"])
 class PolicyGradientObjective(Objective):
@@ -311,7 +339,6 @@ class PolicyGradientObjective(Objective):
         super().__init__(self,
                          scope,
                          replay_buffer,
-                         element_cls,
                          policy_func,
                          iteration_of_optimization)
 
@@ -352,17 +379,19 @@ class PolicyGradientObjective(Objective):
 
         return self._next_state_plh
 
-    def set_up(self,
-               session,
-               regularizer=None):
+    def set_up(self, session):
 
         self._func.set_up(session)
 
         with self._scope():
 
             if self._from_gradient:
+
                 gradients = self._func.from_gradient_func(self._policy_return)
             else:
+                if self.regularizers:
+                    self._objective += sum(self.regularizers)
+
                 expected_return = tf.reduce_mean(self._policy_return,
                                                  name="reduce_mean_return")
                 gradients = self._func.gradients(expected_return)
@@ -370,13 +399,8 @@ class PolicyGradientObjective(Objective):
             self._func.apply_gradients(gradients)
 
     def push(self, env_dict):
-        """ Accounts for new env_dict
-        element
-
-            Args:
-                env_dict: sampled from `Environment`
-        """
-        pass
+        element = self._element_cls.make_element(env_dict)
+        self._replay_buffer.push(element)
 
     def optimize(self,
                  session,
@@ -389,6 +413,8 @@ class PolicyGradientObjective(Objective):
                               {"state": batch.state},
                               {"action_taken": batch.action,
                                "next_state": batch.next_state})
+
+        self._improvement_steps += 1
 
 
 class Objectives(Enum):
