@@ -1,11 +1,10 @@
-import tensorflow as tf
 import gin
 from advantage.agents.base.base_agents import DecoupledValueGradientAgent
-from advantage.utils.value_agent import decayed_epsilon
 from advantage.utils.gin_utils import gin_bind_init
 from advantage.agents.objectives import Objectives
+from advantage.agents.policies import Policies
 from advantage.buffers.replay_buffers import RandomizedReplayBuffer
-
+from advantage.buffers.elements import Sarsa
 
 @gin.configurable(blacklist=["scope", "environment"])
 class DeepQNetworks(DecoupledValueGradientAgent):
@@ -17,24 +16,20 @@ class DeepQNetworks(DecoupledValueGradientAgent):
 
     name_scope = "deep_q_networks"
 
-    # pylint: disable=too-many-arguments
-    # reason-disabled: argument format acceptable
-    def __init__(self,
-                 scope,
-                 environment,
-                 epsilon):
+    def pre_iteration(self):
+        pass
 
-        self._epsilon = epsilon
-
-        super().__init__(scope, environment)
+    def post_iteration(self):
+        pass
 
     @classmethod
     def gin_wire(cls):
         gin_bind_init(cls,
-                      "RandomizedReplayBuffer.element_cls",
-                      Sarsa)
+                      Policies.VALUE,
+                      "use_epsilon",
+                      True)
         gin_bind_init(cls,
                       Objectives.DECOUPLED_VALUE_GRADIENT,
                       "replay_buffer",
-                      RandomizedReplayBuffer())
+                      RandomizedReplayBuffer(Sarsa))
         super().gin_wire()
