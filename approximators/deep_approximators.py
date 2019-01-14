@@ -109,7 +109,7 @@ def deep_approximator(cls):
 
             self._copy_ops = {}
 
-            self._optimizer = optimizer() if optimizer else None
+            self._optimizer = None
 
             self._loss = None
 
@@ -120,13 +120,28 @@ def deep_approximator(cls):
                 raise NotImplementedError("%s must implement"
                                           " `set_up(self, architecture, tensor_inputs, inputs_placeholders)`")
 
+
             self._wrapped = cls()
+
+            self.optimizer_fn = optimizer
 
             self.__class__.__name__ = self._wrapped.__class__.__name__
             self.__class__.__doc__ = self._wrapped.__class__.__doc__
 
         def __getattr__(self, attr):
             return getattr(self._wrapped, attr)
+
+        @property
+        def architecture(self):
+            """ property for `_architecture`
+            """
+            return self._architecture
+
+        @property
+        def tensor_inputs(self):
+            """ property for `_tensor_inputs`
+            """
+            return self._tenor_inputs
 
         @property
         def inputs_placeholders(self):
@@ -182,6 +197,8 @@ def deep_approximator(cls):
 
             # build optimizer and add output
             with self._scope():
+                if self._optimizer_fn:
+                    self._optimizer = self._optimizer_fn()
 
                 self._network = last_block
 
@@ -215,6 +232,7 @@ def deep_approximator(cls):
             """
 
             with self._scope():
+
                 last_block = self._wrapped.set_up(self._architecture,
                                                   self._tensor_inputs,
                                                   self._inputs_placeholders)
